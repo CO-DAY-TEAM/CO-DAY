@@ -1,0 +1,77 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[manifest]
+members = [
+    "coday-api",
+    "coday-contracts",
+    "coday-core",
+    "coday-pipeline",
+    "coday-worker",
+]
+
+[[package]]
+name = "coday-api"
+version = "0.1.0"
+source = { editable = "apps/api" }
+dependencies = [
+    { name = "coday-contracts" },
+    { name = "coday-core" },
+    { name = "coday-pipeline" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "coday-contracts", editable = "packages/contracts" },
+    { name = "coday-core", editable = "packages/core" },
+    { name = "coday-pipeline", editable = "packages/pipeline" },
+]
+
+[[package]]
+name = "coday-contracts"
+version = "0.1.0"
+source = { editable = "packages/contracts" }
+
+[[package]]
+name = "coday-core"
+version = "0.1.0"
+source = { editable = "packages/core" }
+dependencies = [
+    { name = "coday-contracts" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "coday-contracts", editable = "packages/contracts" }]
+
+[[package]]
+name = "coday-pipeline"
+version = "0.1.0"
+source = { editable = "packages/pipeline" }
+dependencies = [
+    { name = "coday-contracts" },
+    { name = "coday-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "coday-contracts", editable = "packages/contracts" },
+    { name = "coday-core", editable = "packages/core" },
+]
+
+[[package]]
+name = "coday-worker"
+version = "0.1.0"
+source = { editable = "apps/worker" }
+dependencies = [
+    { name = "coday-contracts" },
+    { name = "coday-core" },
+    { name = "coday-pipeline" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "coday-contracts", editable = "packages/contracts" },
+    { name = "coday-core", editable = "packages/core" },
+    { name = "coday-pipeline", editable = "packages/pipeline" },
+]
