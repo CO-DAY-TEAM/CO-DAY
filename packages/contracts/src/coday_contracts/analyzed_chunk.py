@@ -12,9 +12,9 @@ DiffLineKind = Literal["added", "removed", "context"]
 class DiffLine(BaseModel):
     """diff의 한 줄. 줄 앞의 +, -, 공백 기호는 떼고 content에 코드만 담는다."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True) # 불변성 보장
 
-    kind: DiffLineKind
+    kind: DiffLineKind 
     content: str
     old_line: int | None = Field(default=None, description="변경 전 파일 기준 줄 번호. 추가된 줄은 None")
     new_line: int | None = Field(default=None, description="변경 후 파일 기준 줄 번호. 삭제된 줄은 None")
