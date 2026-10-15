@@ -7,14 +7,15 @@
 ```
 analyze/
 ├── __init__.py        # 공개: analyze 하나만
-├── service.py         # 진입 함수 analyze(): 순서대로 호출만
+├── service.py         # 진입 함수 analyze(): 수집·파싱·분할 연결
+├── collector.py       # GitHub PR patch와 관련 코드 수집
 ├── diff_parser.py     # patch 문자열 → hunk와 줄 번호
 ├── file_filter.py     # 리뷰할 파일인지 판단
 ├── chunker.py         # hunk → AnalyzedChunk 목록
 └── tests/
     ├── test_diff_parser.py
     ├── test_file_filter.py
-    └── test_service.py
+    └── test_chunker.py
 ```
 
 ### 2. `service.py`에 넣지 말아야 할 것

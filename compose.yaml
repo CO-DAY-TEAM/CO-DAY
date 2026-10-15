@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: coday
+      POSTGRES_USER: coday
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coday}
+    volumes:
+      - database:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coday -d coday"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://coday:${POSTGRES_PASSWORD:-coday}@db:5432/coday
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://coday:${POSTGRES_PASSWORD:-coday}@db:5432/coday
+      GITHUB_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
+    volumes:
+      - ./github-app.pem:/run/secrets/github-app.pem:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    command: ["python", "-m", "coday_worker.main"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://coday:${POSTGRES_PASSWORD:-coday}@db:5432/coday
+      GITHUB_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
+    volumes:
+      - ./github-app.pem:/run/secrets/github-app.pem:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  proxy:
+    image: caddy:2
+    profiles: [https]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    restart: unless-stopped
+volumes:
+  database:
+  caddy_data:
+  caddy_config:
