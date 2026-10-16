@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "coday-contracts",
     "coday-core",
+    "openai-agents>=0.23.1,<1",
 ]
 
 [build-system]
