@@ -15,6 +15,7 @@ from coday_contracts.analyzed_chunk import AnalyzedChunk
 from coday_contracts.review_result import ReviewResult
 from coday_core.config import Settings
 from coday_core.errors import ServiceError
+
 from coday_pipeline.judge.prompts import INSTRUCTIONS
 
 
