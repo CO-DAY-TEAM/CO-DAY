@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "coday-contracts",
+    "PyJWT[crypto]>=2.10,<3",
+    "python-dotenv>=1.2.4",
 ]
 
 [build-system]

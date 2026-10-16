@@ -6,6 +6,8 @@ dependencies = [
     "coday-contracts",
     "coday-core",
     "coday-pipeline",
+    "fastapi>=0.143.1",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [build-system]
