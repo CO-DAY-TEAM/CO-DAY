@@ -1,0 +1,31 @@
+# https://pre-commit.com
+# https://pre-commit.com/hooks.html
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      # YAML 문법 검사
+      - id: check-yaml
+
+      # TOML 문법 검사
+      - id: check-toml
+
+  - repo: local
+    hooks:
+      # Python 린트 자동 수정
+      - id: local-ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude --fix
+        require_serial: true
+        language: unsupported
+        types:
+          - python
+
+      # Python 포맷 자동 정리
+      - id: local-ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        require_serial: true
+        language: unsupported
+        types:
+          - python
