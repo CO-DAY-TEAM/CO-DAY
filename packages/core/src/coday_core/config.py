@@ -20,15 +20,26 @@ class Settings(BaseSettings):
     token_encryption_key: SecretStr = SecretStr("")
     openai_api_key: SecretStr = SecretStr("")
     openai_model: str = "gpt-5-mini"
+
+    # 동시 처리 리뷰 수
     worker_concurrency: int = Field(default=2, ge=1, le=16)
+    # 리뷰 처리 제한 시간(초)
     job_timeout_seconds: int = Field(default=1800, ge=60)
+    # 리뷰당 AI 호출 한도(내부 재시도 포함)
     max_ai_calls: int = Field(default=100, ge=1)
+    # 개별 파일 크기 제한(바이트)
     max_file_bytes: int = Field(default=2_000_000, ge=1000)
+    # 전체 입력 크기 제한(바이트)
     max_input_bytes: int = Field(default=20_000_000, ge=1000)
+    # 분석 청크의 최대 문자 수
     chunk_chars: int = Field(default=18000, ge=500)
+    # 함께 조회할 관련 파일 수
     related_file_count: int = Field(default=5, ge=0, le=20)
+    # 외부 요청의 내부 재시도 횟수
     internal_retries: int = Field(default=2, ge=0, le=5)
+    # 중단된 워커 작업의 복구 횟수 한도
     worker_recoveries: int = Field(default=3, ge=1, le=10)
+    # API 서버에서 제공할 프런트엔드 빌드 결과 경로
     web_dist: Path = Path("apps/web/dist")
 
     @property
