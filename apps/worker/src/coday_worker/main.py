@@ -6,6 +6,7 @@ from contextlib import AsyncExitStack
 from agents import set_default_openai_client
 from coday_core.config import get_settings
 from coday_core.github import GitHub
+from coday_pipeline.langfuse import setup_langfuse
 from openai import AsyncOpenAI
 
 from coday_worker.runner import worker_loop
@@ -15,6 +16,7 @@ async def main():
     settings = get_settings()
     settings.validate_auth()
     async with AsyncExitStack() as stack:
+        setup_langfuse(settings)
         github = GitHub(settings)
         stack.push_async_callback(github.close)
         if settings.openai_api_key.get_secret_value():
@@ -25,7 +27,7 @@ async def main():
                     timeout=180,
                 )
             )
-            set_default_openai_client(client, use_for_tracing=True)
+            set_default_openai_client(client)
         async with asyncio.TaskGroup() as workers:
             for _ in range(settings.worker_concurrency):
                 workers.create_task(worker_loop(github))

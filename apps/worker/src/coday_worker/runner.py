@@ -4,6 +4,7 @@ import hashlib
 import logging
 from datetime import timedelta
 
+from agents import trace
 from coday_contracts.review_input import ReviewInput
 from coday_contracts.review_job import ReviewJob
 from coday_contracts.review_result import ReviewResult
@@ -252,7 +253,8 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
 
     pulse = asyncio.create_task(heartbeat())
     try:
-        await asyncio.wait_for(pipeline(), timeout=github.settings.job_timeout_seconds)
+        with trace("review-pr"):
+            await asyncio.wait_for(pipeline(), timeout=github.settings.job_timeout_seconds)
     except Stopped as error:
         # head SHA 변경이나 PR의 closed 상태로 중단된 리뷰에 대체 작업이 없으면 진행 댓글을 '실패'로 갱신한다.
         # 새 커밋은 자동 리뷰하지 않으므로, open 상태의 PR에 댓글로 새 리뷰를 요청하도록 안내한다.
