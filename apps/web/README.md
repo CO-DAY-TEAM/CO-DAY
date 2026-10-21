@@ -21,5 +21,3 @@ pnpm --dir apps/web build
 ```
 
 `lint`는 Oxlint를 실행합니다. `build`는 TypeScript 검사 후 Vite로 빌드하며, 결과는 `dist/`에 생성됩니다. 빌드된 화면은 FastAPI 서버에서 제공합니다.
-
-제품 동작과 완료 기준은 [최종 설계](../../docs/github-app-design.md)를 따릅니다.
