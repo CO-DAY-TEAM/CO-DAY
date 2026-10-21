@@ -84,7 +84,7 @@ co-day/
 
 - Python 3.12
 - [uv](https://docs.astral.sh/uv/)
-- Node.js 20, [pnpm](https://pnpm.io/)
+- Node.js 24, [pnpm](https://pnpm.io/)
 - Docker, Docker Compose
 
 ### 설치
@@ -94,11 +94,10 @@ git clone https://github.com/<owner>/co-day.git
 cd co-day
 
 # Python 의존성
-uv sync
+uv sync --all-packages
 
 # 프론트엔드 의존성
-cd apps/web
-pnpm install
+pnpm --dir apps/web install
 ```
 
 ### 환경 변수
@@ -115,7 +114,7 @@ cp .env.example .env
 
 ```bash
 # 로컬 개발 환경
-docker compose up
+docker compose up --build
 ```
 
 ## 테스트
