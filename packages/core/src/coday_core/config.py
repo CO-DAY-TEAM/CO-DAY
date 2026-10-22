@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     token_encryption_key: SecretStr = SecretStr("")
     openai_api_key: SecretStr = SecretStr("")
     openai_model: str = "gpt-5-mini"
+    langfuse_tracing_enabled: bool = False
+    langfuse_base_url: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: SecretStr = SecretStr("")
 
     # 동시 처리 리뷰 수
     worker_concurrency: int = Field(default=2, ge=1, le=16)

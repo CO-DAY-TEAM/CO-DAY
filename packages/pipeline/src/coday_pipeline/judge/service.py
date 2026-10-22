@@ -70,7 +70,7 @@ async def judge(
         return True
 
     agent = Agent(
-        name="CO-DAY reviewer",
+        name="review-agent",
         instructions=INSTRUCTIONS,
         model=settings.openai_model,
         model_settings=ModelSettings(
@@ -100,6 +100,6 @@ async def judge(
         agent,
         input=json.dumps(payload, ensure_ascii=False),
         max_turns=1,
-        run_config=RunConfig(tracing_disabled=False),
+        run_config=RunConfig(workflow_name="review-chunk"),
     )
     return validate_findings(result.final_output, chunk)
