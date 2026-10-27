@@ -1,0 +1,10 @@
+**
+!pyproject.toml
+!uv.lock
+!packages/**
+!apps/api/pyproject.toml
+!apps/worker/pyproject.toml
+!evals/reviewbench/reviewer.py
+**/__pycache__/**
+**/.env
+**/*.pem
