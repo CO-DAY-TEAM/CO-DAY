@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 최초 설치·Codex 로그인은 README에서 한 번 준비
+# 최초 설치·인증 설정은 README에서 한 번 준비
 # 실행: bash evals/reviewbench/run.sh --set test --pr 0
 # 평가 범위(--set test|full 또는 --pr <인덱스>)를 지정하고 공식 스크립트로 전달
 set -e
@@ -19,16 +19,17 @@ work="$eval_dir/.cache/work"
 run="$eval_dir/runs/$(date +%Y%m%d-%H%M%S)"
 image="coday-reviewbench:$(basename "$run")"
 
-# 2. 리뷰용 키·모델은 .env, 심사 모델은 models.json에서 설정
+# 2. 리뷰용 키·모델과 심사 인증 방식은 .env, 심사 모델은 models.json에서 설정
 # set -a로 .env의 값을 이후 명령에 환경변수로 전달
 set -a
 . "$eval_dir/.env"
 set +a
 
 export PI_CODING_AGENT_DIR="$eval_dir/.cache/pi"
+mkdir -p "$PI_CODING_AGENT_DIR" "$run/scoring"
 cp "$eval_dir/models.json" "$PI_CODING_AGENT_DIR/models.json"
-judge_model=$(jq -r '.providers["openai-codex"].models[0].id' "$eval_dir/models.json")
-mkdir -p "$run/scoring"
+judge_provider=${JUDGE_PROVIDER:-openai-codex}
+judge_model=$(jq -r --arg provider "$judge_provider" '.providers[$provider].models[0].id' "$eval_dir/models.json")
 
 # 3. 현재 CO-DAY 코드와 프롬프트로 공식 실행 플랫폼인 linux/amd64 이미지 빌드
 docker build \
@@ -72,7 +73,7 @@ done
   cd "$reviewbench" &&
   npm run judge -- \
     --candidate "$run/findings" \
-    --provider openai-codex \
+    --provider "$judge_provider" \
     --model "$judge_model" \
     --allow-empty \
     --output "$run/scoring/results.json" \

@@ -19,7 +19,7 @@ Git, 실행 중인 Docker Desktop, Node.js 20 이상, npm, Bash, jq가 필요합
 
 ### 환경변수
 
-`.env`에 리뷰 생성용 키와 모델을 지정합니다.
+`.env`에 리뷰 생성용 키·모델과 심사 인증 방식을 지정합니다.
 
 ```bash
 cp evals/reviewbench/.env.example evals/reviewbench/.env
@@ -41,7 +41,18 @@ ReviewBench는 위 커밋으로 고정하며, 업데이트가 필요할 때만 �
 
 ### 심사 모델 및 인증 설정
 
-심사 모델은 `models.json`에서 지정하며 리뷰 모델과 독립적입니다. 현재 설정은 `openai-codex/gpt-6.1-sol`입니다.
+`.env`의 `JUDGE_PROVIDER`로 심사 인증 방식을 선택합니다.
+
+| `JUDGE_PROVIDER` | 인증 | 채점 사용량 |
+| --- | --- | --- |
+| `openai-codex` | pi에서 ChatGPT 계정으로 로그인 | 해당 계정의 Codex 사용량 |
+| `openai` | `.env`의 `OPENAI_API_KEY` | OpenAI API 사용량 |
+
+심사 모델은 `models.json`에서 선택한 provider의 모델을 사용하며 리뷰 모델과 독립적입니다. 두 방식 모두 기본 심사 모델은 `gpt-6.1-sol`입니다.
+
+#### ChatGPT 로그인
+
+`.env`에 `JUDGE_PROVIDER=openai-codex`를 지정하고 최초 한 번 로그인합니다.
 
 ```bash
 # 심사 모델 설정
@@ -59,7 +70,15 @@ pi 화면에서 `/login`을 입력하고 **ChatGPT Plus/Pro (Codex)**를 선택�
 
 인증 완료 후 `/quit`로 종료합니다. 인증 정보는 `.cache/pi/auth.json`에 저장됩니다.
 
-리뷰 생성은 OpenAI API 사용량, 로컬 채점은 Codex 구독 한도를 소비합니다.
+계정의 모델 권한과 사용 한도가 적용됩니다.
+
+#### OpenAI API 키
+
+`.env`에 `JUDGE_PROVIDER=openai`를 지정합니다. 리뷰 생성에 사용하는 `OPENAI_API_KEY`를 채점에도 사용하며, pi 로그인은 필요하지 않습니다. 리뷰 생성과 채점 모두 해당 키의 API 사용량으로 과금됩니다.
+
+pi의 `.cache/pi/auth.json`에 `openai` API 키를 따로 저장한 경우에는 pi의 인증 우선순위에 따라 저장된 키로 채점합니다.
+
+평가 실행 명령은 두 방식 모두 동일합니다.
 
 ## 평가 실행
 
@@ -83,7 +102,7 @@ bash evals/reviewbench/run.sh --set full
 
 실행 순서는 이미지 빌드 → 공식 리뷰 실행 → 원본 보관 → 공식 채점입니다. 각 단계가 실패하면 중단합니다.
 
-정상적으로 리뷰를 마쳤지만 지적이 0개인 결과도 공식 `--allow-empty` 옵션으로 집계합니다. 심사할 지적이 없으면 Codex 호출은 발생하지 않습니다.
+정상적으로 리뷰를 마쳤지만 지적이 0개인 결과도 공식 `--allow-empty` 옵션으로 집계합니다. 심사할 지적이 없으면 심사 모델 호출은 발생하지 않습니다.
 
 PR 저장소는 `.cache/work/repos/`에서 재사용하고 리뷰·점수는 실행별 새 폴더에 저장합니다. 채점 동시성은 공식 기본값 1입니다.
 

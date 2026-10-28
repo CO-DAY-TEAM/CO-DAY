@@ -9,6 +9,17 @@
           "maxTokens": 128000
         }
       ]
+    },
+    "openai": {
+      "api": "openai-responses",
+      "models": [
+        {
+          "id": "gpt-6.1-sol",
+          "reasoning": true,
+          "contextWindow": 500000,
+          "maxTokens": 128000
+        }
+      ]
     }
   }
 }
