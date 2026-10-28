@@ -15,7 +15,8 @@ from coday_contracts.analyzed_chunk import AnalyzedChunk
 from coday_contracts.review_result import ReviewResult
 from coday_core.config import Settings
 from coday_core.errors import ServiceError
-from langfuse import get_client, propagate_attributes
+
+from coday_pipeline.judge.prompts import INSTRUCTIONS
 
 
 def validate_findings(result: ReviewResult, chunk: AnalyzedChunk) -> ReviewResult:
@@ -68,11 +69,9 @@ async def judge(
         await reserve_attempt()
         return True
 
-    # 선택된 production 버전을 SDK 기본 캐시(60초)로 조회한다.
-    prompt = get_client().get_prompt("prompt")
     agent = Agent(
         name="review-agent",
-        instructions=prompt.compile(),
+        instructions=INSTRUCTIONS,
         model=settings.openai_model,
         model_settings=ModelSettings(
             store=False,
@@ -97,12 +96,10 @@ async def judge(
         "related_files": related_files,
     }
     await reserve_attempt()
-    # OpenInference가 기록하는 LLM 호출에 사용한 프롬프트 버전을 연결한다.
-    with propagate_attributes(prompt=prompt):
-        result = await Runner.run(
-            agent,
-            input=json.dumps(payload, ensure_ascii=False),
-            max_turns=1,
-            run_config=RunConfig(workflow_name="review-chunk"),
-        )
+    result = await Runner.run(
+        agent,
+        input=json.dumps(payload, ensure_ascii=False),
+        max_turns=1,
+        run_config=RunConfig(workflow_name="review-chunk"),
+    )
     return validate_findings(result.final_output, chunk)
