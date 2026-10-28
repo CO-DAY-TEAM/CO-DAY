@@ -1,7 +1,5 @@
 from agents import set_tracing_disabled
 from coday_core.config import Settings
-from langfuse import Langfuse
-from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
 
 
 def setup_langfuse(settings: Settings) -> None:
@@ -11,6 +9,9 @@ def setup_langfuse(settings: Settings) -> None:
     # 추적이 꺼져 있으면 Langfuse 초기화도 생략한다.
     if not settings.langfuse_tracing_enabled:
         return
+
+    from langfuse import Langfuse
+    from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
 
     Langfuse(
         public_key=settings.langfuse_public_key,
