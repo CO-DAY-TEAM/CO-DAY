@@ -1,0 +1,13 @@
+.auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 20px;
+}
+.auth-loading .logo {
+  font-size: 24px;
+}
+.auth-loading p {
+  color: var(--muted);
+}
