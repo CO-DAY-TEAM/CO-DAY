@@ -1,0 +1,25 @@
+.status {
+  font-size: 11px;
+  border: 1px solid;
+  padding: 2px 6px;
+  width: max-content;
+  white-space: nowrap;
+}
+.status-queued {
+  color: var(--muted);
+}
+.status-running {
+  color: var(--info);
+}
+.status-completed {
+  color: var(--accent);
+}
+.status-failed {
+  color: var(--danger);
+}
+.status-cancelled {
+  color: var(--warning);
+}
+.status-superseded {
+  color: var(--purple);
+}

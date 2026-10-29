@@ -1,0 +1,111 @@
+.titlebar {
+  height: 48px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 22px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+.titlebar nav {
+  display: flex;
+  gap: 4px;
+}
+.titlebar nav button,
+.icon-button,
+.user-button {
+  border: 0;
+  background: transparent;
+  padding: 7px 10px;
+}
+.titlebar nav button:hover,
+.icon-button:hover,
+.user-button:hover {
+  background: var(--panel-hover);
+}
+.titlebar nav .nav-active {
+  background: var(--text);
+  color: var(--bg);
+}
+.nav-active kbd {
+  color: inherit;
+}
+.titlebar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.icon-button {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* 사용자 메뉴 */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  background: var(--info);
+  color: var(--bg);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 10px;
+  margin-right: 6px;
+}
+.user-wrap {
+  position: relative;
+}
+.dropdown {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  z-index: 20;
+  padding: 6px;
+}
+.dropdown a,
+.dropdown button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  border: 0;
+  background: none;
+  padding: 7px 10px;
+  text-align: left;
+}
+.dropdown a:hover,
+.dropdown button:hover {
+  background: var(--panel-hover);
+  color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .titlebar {
+    height: auto;
+    min-height: 56px;
+    padding: 8px 12px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .titlebar > .traffic {
+    display: none;
+  }
+  .titlebar nav {
+    order: 3;
+    width: 100%;
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+  }
+  .titlebar nav button {
+    flex: 1;
+    font-size: 12px;
+  }
+}

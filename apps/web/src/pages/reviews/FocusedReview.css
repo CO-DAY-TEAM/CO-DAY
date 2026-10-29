@@ -1,0 +1,18 @@
+.focused {
+  margin-bottom: 22px;
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.focused-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.focused p {
+  margin: 5px 0;
+}
+.focused-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
