@@ -1,7 +1,6 @@
 import type { ReviewData } from '../../api/types'
 import { Panel } from '../../components/Panel'
 import { categories } from '../../lib/constants'
-import { blockBar } from '../../lib/format'
 import './StatsGrid.css'
 
 export function StatsGrid({ stats }: { stats?: ReviewData['stats'] }) {
@@ -28,9 +27,9 @@ export function StatsGrid({ stats }: { stats?: ReviewData['stats'] }) {
           return (
             <div className={`dist dist-${key}`} key={key}>
               <span>{label}</span>
-              <code aria-hidden="true">
-                {blockBar(total ? count / total : 0, 12)}
-              </code>
+              <div className="bar" aria-hidden="true">
+                <i style={{ width: `${total ? (count / total) * 100 : 0}%` }} />
+              </div>
               <b>{count}</b>
             </div>
           )

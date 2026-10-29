@@ -14,8 +14,3 @@ export function ago(value: string) {
   if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}시간 전`
   return `${Math.floor(minutes / 60 / 24)}일 전`
 }
-
-export function blockBar(ratio: number, size = 10) {
-  const filled = Math.round(Math.min(Math.max(ratio, 0), 1) * size)
-  return '█'.repeat(filled) + '░'.repeat(size - filled)
-}

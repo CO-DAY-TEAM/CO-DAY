@@ -30,17 +30,24 @@
 .dist b {
   text-align: right;
 }
-.dist code {
-  font-size: 12px;
+.dist .bar {
+  height: 8px;
+  margin-right: 8px;
+  background: var(--border);
   color: var(--danger);
 }
-.dist-security code {
+.dist .bar i {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+.dist-security .bar {
   color: var(--warning);
 }
-.dist-style code {
+.dist-style .bar {
   color: var(--info);
 }
-.dist-maintainability code {
+.dist-maintainability .bar {
   color: var(--purple);
 }
 
