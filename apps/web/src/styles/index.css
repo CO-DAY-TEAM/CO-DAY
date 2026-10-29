@@ -1,0 +1,251 @@
+:root {
+  --bg: #0a0c0d;
+  --panel: #101315;
+  --panel-hover: #161a1d;
+  --border: #23292e;
+  --border-strong: #3a424a;
+  --text: #d6dee6;
+  --muted: #7d8790;
+  --dim: #4c555d;
+  --accent: #3fd17a;
+  --info: #4ea8ff;
+  --warning: #f2b640;
+  --danger: #ff5c5c;
+  --purple: #b48cff;
+
+  color-scheme: dark;
+  font-family: 'JetBrains Mono', 'Noto Sans KR', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  background: var(--bg);
+}
+[data-theme='light'] {
+  --bg: #f7f6f2;
+  --panel: #fffefa;
+  --panel-hover: #eeede8;
+  --border: #d3d0c8;
+  --border-strong: #918e87;
+  --text: #1c2024;
+  --muted: #5e656b;
+  --dim: #858b90;
+  --accent: #138a48;
+  --info: #176fc1;
+  --warning: #9a6500;
+  --danger: #cc3535;
+  --purple: #7352b5;
+
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 340px;
+  background: var(--bg);
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+code,
+kbd {
+  font-family: inherit;
+}
+code {
+  color: var(--info);
+  font-size: 11px;
+}
+kbd {
+  font-size: 10px;
+  color: var(--muted);
+}
+select {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  padding: 7px 30px 7px 9px;
+  max-width: 100%;
+}
+textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  padding: 10px;
+  line-height: 1.7;
+}
+textarea:disabled,
+select:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+/* 버튼: [ 텍스트 ] 느낌의 각진 터미널 버튼 */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  border-radius: 2px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+.button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+.button.primary:hover:not(:disabled) {
+  color: var(--bg);
+  filter: brightness(1.1);
+}
+.button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.muted {
+  color: var(--muted);
+}
+.accent {
+  color: var(--accent);
+}
+.cursor {
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+  }
+}
+
+/* ── 여러 화면에서 함께 쓰는 조각 ───────────── */
+.warning {
+  color: var(--warning);
+}
+.danger {
+  color: var(--danger);
+}
+.info {
+  color: var(--info);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.button.small {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.tag {
+  border: 1px solid var(--border-strong);
+  padding: 1px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sha {
+  border: 1px solid var(--border-strong);
+  padding: 0 4px;
+  color: var(--text);
+}
+.row-error {
+  display: block;
+  color: var(--danger);
+  font-size: 11px;
+  font-style: normal;
+}
+
+/* 창 왼쪽 위 ● ● ● */
+.traffic {
+  display: flex;
+  gap: 6px;
+}
+.traffic i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.traffic i:nth-child(2) {
+  background: var(--warning);
+}
+.traffic i:nth-child(3) {
+  background: var(--accent);
+}
+/* 상단 가운데 user@co-day: ~/path */
+.title-path {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--dim);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 페이지 상단의 선택 줄 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+  color: var(--muted);
+}
+.toolbar b {
+  color: var(--text);
+}
+.toolbar-end {
+  margin-left: auto;
+}
+
+@media (max-width: 1000px) {
+  .title-path {
+    display: none;
+  }
+}

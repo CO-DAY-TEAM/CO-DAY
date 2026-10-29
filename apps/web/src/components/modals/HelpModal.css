@@ -1,0 +1,24 @@
+.shortcut-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 22px;
+}
+.shortcut-list span {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.shortcut-list kbd {
+  border: 1px solid var(--border-strong);
+  min-width: 36px;
+  text-align: center;
+  padding: 3px;
+  color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .shortcut-list {
+    grid-template-columns: 1fr;
+  }
+}

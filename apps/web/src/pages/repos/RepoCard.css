@@ -1,0 +1,64 @@
+.repo-card:hover {
+  border-color: var(--border-strong);
+}
+.repo-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.repo-initial {
+  display: grid;
+  place-items: center;
+  background: var(--border);
+  width: 34px;
+  height: 34px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.repo-name {
+  min-width: 0;
+  flex: 1;
+}
+.repo-name strong,
+.repo-name small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-name small {
+  color: var(--muted);
+}
+/* ON/OFF 표시는 Toggle.css의 .switch와 같은 모양 */
+.repo-card .switch {
+  color: var(--muted);
+  white-space: pre;
+  flex-shrink: 0;
+}
+.repo-card .switch.on {
+  color: var(--accent);
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 14px 0;
+}
+.badges span {
+  border: 1px solid var(--border-strong);
+  padding: 1px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.repo-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.repo-actions > span:last-child {
+  display: flex;
+  gap: 6px;
+}

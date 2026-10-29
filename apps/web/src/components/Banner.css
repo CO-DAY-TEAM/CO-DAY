@@ -1,0 +1,26 @@
+.banner {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  margin-bottom: 20px;
+}
+.banner b {
+  color: var(--accent);
+  white-space: nowrap;
+}
+.banner.error {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 7%, var(--panel));
+}
+.banner.error b {
+  color: var(--danger);
+}
+.banner button {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}

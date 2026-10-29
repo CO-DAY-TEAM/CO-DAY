@@ -1,0 +1,39 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #000 72%, transparent);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  width: min(560px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  box-shadow: 10px 10px 0 color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head b {
+  color: var(--accent);
+}
+.modal-head button {
+  background: none;
+  border: 0;
+  color: var(--muted);
+}
+.modal-body {
+  margin: 20px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
