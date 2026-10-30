@@ -1,0 +1,20 @@
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 16px;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+.empty > b {
+  font-size: 26px;
+  color: var(--text);
+}
+.empty > strong {
+  font-size: 14px;
+  color: var(--text);
+}
+.command-chip {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+}

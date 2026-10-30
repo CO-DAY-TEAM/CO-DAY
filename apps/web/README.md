@@ -1,32 +1,23 @@
-# React + TypeScript + Vite
+# CO-DAY 대시보드
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React·TypeScript·Vite로 구현한 대시보드입니다. GitHub 로그인, 저장소 연결, 공통·저장소별 설정, 리뷰 목록, 실패 재시도와 통계를 제공합니다. 화면의 설명은 한국어로 작성하고, GitHub 권한명과 코드 식별자는 원문을 사용합니다.
 
-Currently, two official plugins are available:
+## 개발 실행
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+CO-DAY 폴더에서 실행합니다.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+pnpm --dir apps/web install --frozen-lockfile
+pnpm --dir apps/web dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Vite는 `/api` 요청을 `http://127.0.0.1:8000`의 FastAPI 서버로 전달합니다. API·Worker 실행과 GitHub App 연결은 [프로젝트 실행 안내](../../README.md)를 따릅니다.
+
+## 정적 검사와 빌드
+
+```bash
+pnpm --dir apps/web lint
+pnpm --dir apps/web build
+```
+
+`lint`는 Oxlint를 실행합니다. `build`는 TypeScript 검사 후 Vite로 빌드하며, 결과는 `dist/`에 생성됩니다. 빌드된 화면은 FastAPI 서버에서 제공합니다.
