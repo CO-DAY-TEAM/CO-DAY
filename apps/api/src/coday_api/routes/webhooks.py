@@ -4,7 +4,7 @@ import json
 from coday_core.db import transaction
 from coday_core.db.models import Delivery
 from coday_core.errors import ServiceError
-from coday_pipeline.ingest.service import apply_revocation, verify_signature
+from coday_pipeline.ingest.service import apply_revocation, should_process, verify_signature
 from fastapi import APIRouter, Request
 from sqlalchemy.dialects.postgresql import insert
 
@@ -48,6 +48,8 @@ async def webhook(request: Request):
             raise ValueError()
     except ValueError as error:
         raise ServiceError("invalid_payload", "webhook 본문이 유효하지 않습니다.", 400) from error
+    if not should_process(event, payload, request.app.state.settings.github_app_slug):
+        return {"accepted": True}
     with transaction() as db:
         inserted = db.execute(
             insert(Delivery)

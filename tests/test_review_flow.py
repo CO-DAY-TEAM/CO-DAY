@@ -203,6 +203,71 @@ async def test_signed_webhook_queues_one_review_per_delivery(github):
         assert review.trigger == "automatic"
 
 
+# 리뷰와 무관한 이벤트는 저장하지 않고, 리뷰 요청 댓글만 저장하는지 확인한다.
+@pytest.mark.parametrize(
+    ("event", "extra", "stored"),
+    [
+        ("pull_request", {"action": "synchronize"}, 0),
+        ("pull_request", {"action": "labeled"}, 0),
+        ("pull_request", {"action": "ready_for_review"}, 1),
+        (
+            "issue_comment",
+            {
+                "action": "created",
+                "issue": {"number": 1, "pull_request": {"url": "https://example.test/pulls/1"}},
+                "comment": {"user": {"type": "User", "login": "owner"}, "body": "좋아요"},
+            },
+            0,
+        ),
+        (
+            "issue_comment",
+            {
+                "action": "created",
+                "issue": {"number": 1},
+                "comment": {
+                    "user": {"type": "User", "login": "owner"},
+                    "body": "@co-day-review review",
+                },
+            },
+            0,
+        ),
+        (
+            "issue_comment",
+            {
+                "action": "created",
+                "issue": {"number": 1, "pull_request": {"url": "https://example.test/pulls/1"}},
+                "comment": {
+                    "user": {"type": "User", "login": "owner"},
+                    "body": "@co-day-review review",
+                },
+            },
+            1,
+        ),
+    ],
+)
+def test_webhook_stores_only_review_triggers(event, extra, stored):
+    raw = json.dumps({"installation": {"id": 1}, **extra}).encode()
+    signature = "sha256=" + hmac.new(b"test-secret", raw, hashlib.sha256).hexdigest()
+    with TestClient(app) as client:
+        app.state.settings = Settings(
+            _env_file=None,
+            github_webhook_secret="test-secret",
+            github_app_slug="co-day-review",
+        )
+        response = client.post(
+            "/api/webhooks/github",
+            content=raw,
+            headers={
+                "x-github-event": event,
+                "x-github-delivery": "filter",
+                "x-hub-signature-256": signature,
+            },
+        )
+    assert response.status_code == 202
+    with transaction() as db:
+        assert db.scalar(select(func.count()).select_from(Delivery)) == stored
+
+
 # 수동 재리뷰는 현재 head를 새로 분석하고, 이전 리뷰에 있던 문제도 다시 게시하는지 확인한다.
 @pytest.mark.parametrize("next_head", ["head1", "head2"])
 async def test_manual_review_reanalyzes_and_republishes_current_head(

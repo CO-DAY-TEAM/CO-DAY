@@ -28,7 +28,29 @@ def apply_revocation(db, event: str, payload: dict):
         disable_access(db, installation_id, [r["id"] for r in payload["repositories_removed"]])
 
 
+def is_review_command(comment: dict, app_slug: str) -> bool:
+    command = rf"@{re.escape(app_slug)}\s+review"
+    return (
+        comment["user"]["type"] != "Bot"
+        and re.fullmatch(command, comment["body"].strip(), re.IGNORECASE) is not None
+    )
+
+
+def should_process(event: str, payload: dict, app_slug: str) -> bool:
+    if event == "pull_request":
+        return payload.get("action") in {"opened", "ready_for_review"}
+    if event == "issue_comment":
+        return (
+            payload.get("action") == "created"
+            and bool(payload.get("issue", {}).get("pull_request"))
+            and is_review_command(payload["comment"], app_slug)
+        )
+    return True
+
+
 async def ingest(github: GitHub, delivery_id: str, event: str, payload: dict):
+    if not should_process(event, payload, github.settings.github_app_slug):
+        return
     installation_id = payload.get("installation", {}).get("id")
     if not installation_id:
         return
@@ -61,10 +83,7 @@ async def ingest(github: GitHub, delivery_id: str, event: str, payload: dict):
     await github.check_installation(installation_id, repository["full_name"])
     with transaction() as db:
         upsert_repository(db, installation_id, repository)
-    if event == "pull_request" and payload.get("action") in {
-        "opened",
-        "ready_for_review",
-    }:
+    if event == "pull_request":
         await enqueue(
             github,
             repository["id"],
@@ -72,25 +91,16 @@ async def ingest(github: GitHub, delivery_id: str, event: str, payload: dict):
             delivery_id,
             "automatic",
         )
-    elif (
-        event == "issue_comment"
-        and payload.get("action") == "created"
-        and payload.get("issue", {}).get("pull_request")
-    ):
-        comment = payload["comment"]
-        command = rf"@{re.escape(github.settings.github_app_slug)}\s+review"
-        if comment["user"]["type"] != "Bot" and re.fullmatch(
-            command, comment["body"].strip(), re.IGNORECASE
-        ):
-            try:
-                await enqueue(
-                    github,
-                    repository["id"],
-                    payload["issue"]["number"],
-                    delivery_id,
-                    "manual",
-                    requester=comment["user"]["login"],
-                )
-            except ServiceError as error:
-                if error.code not in {"forbidden", "paused", "pr_closed"}:
-                    raise
+    else:
+        try:
+            await enqueue(
+                github,
+                repository["id"],
+                payload["issue"]["number"],
+                delivery_id,
+                "manual",
+                requester=payload["comment"]["user"]["login"],
+            )
+        except ServiceError as error:
+            if error.code not in {"forbidden", "paused", "pr_closed"}:
+                raise
