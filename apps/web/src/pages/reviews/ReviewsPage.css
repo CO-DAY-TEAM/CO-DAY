@@ -1,0 +1,83 @@
+/* 상태 필터 + 검색 */
+.review-tools {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.filters {
+  border: 1px solid var(--border);
+  display: flex;
+  padding: 3px;
+  background: var(--panel);
+}
+.filters button {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.filters .selected {
+  background: var(--text);
+  color: var(--bg);
+}
+.search {
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  flex: 1;
+  background: var(--panel);
+  padding: 0 10px;
+  color: var(--muted);
+}
+.search:focus-within {
+  border-color: var(--accent);
+}
+.search input {
+  border: 0;
+  outline: 0;
+  background: none;
+  width: 100%;
+  padding: 7px;
+}
+
+.review-panel {
+  padding: 0;
+}
+.skeleton {
+  padding: 24px 16px;
+  color: var(--dim);
+}
+.skeleton p {
+  margin: 8px 0;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin: 16px;
+}
+.hint {
+  border: 1px solid var(--border);
+  padding: 9px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.hint b {
+  color: var(--info);
+  margin-right: 6px;
+}
+
+@media (max-width: 800px) {
+  .review-tools {
+    flex-direction: column;
+  }
+  .filters {
+    overflow-x: auto;
+  }
+  .filters button {
+    flex: 1;
+    padding: 4px 8px;
+  }
+}

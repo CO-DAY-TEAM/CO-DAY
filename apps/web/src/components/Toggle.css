@@ -1,0 +1,31 @@
+.switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.switch-row.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.switch-text small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+/* .switch는 레포 카드에서도 ON/OFF 표시로 쓴다 */
+.switch {
+  color: var(--muted);
+  white-space: pre;
+  flex-shrink: 0;
+}
+.switch.on {
+  color: var(--accent);
+}
+.switch-row input:focus-visible + .switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

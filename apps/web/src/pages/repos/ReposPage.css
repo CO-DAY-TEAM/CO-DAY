@@ -1,0 +1,33 @@
+.repo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.add-repo {
+  min-height: 150px;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  font-size: 18px;
+}
+.add-repo span {
+  font-size: 12px;
+}
+.add-repo:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 1000px) {
+  .repo-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 800px) {
+  .repo-grid {
+    grid-template-columns: 1fr;
+  }
+}

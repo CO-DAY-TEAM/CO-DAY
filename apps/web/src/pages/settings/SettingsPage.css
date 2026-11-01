@@ -1,0 +1,6 @@
+.settings {
+  max-width: 760px;
+}
+.settings .toolbar select {
+  flex: 1;
+}
