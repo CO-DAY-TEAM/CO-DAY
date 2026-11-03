@@ -139,6 +139,23 @@ async def progress(
         ).progress_comment_id = comment_id
 
 
+# 수동 리뷰 - 리뷰 요청을 등록한다 / 그냥 지나간다
+# act는 저장된 결과를 받아 github에 게시
+## 게시 계획 만들기 -> 행동 결정하기 -> 게시 결과 저장하기
+
+# 리뷰 코멘트를 이미 올렸는지 확인하는 함수 (이미 올린 리뷰 찾기가 두 곳에 반복되고 있는 걸 개선)
+def find_posted_batch(remote_reviews, *, bot_login, marker, head_sha):
+    for item in remote_reviews:
+        if (
+            item.get("user", {}).get("login") == bot_login
+            and marker in item.get("body", "")
+            and item.get("state") == "COMMENTED"
+            and item.get("command_id") == head_sha
+        ):
+            return item
+    return None
+
+
 async def act(github: GitHub, token: str, full_name: str, review_id: str, guard):
     await guard()
     with transaction() as db:
@@ -160,16 +177,11 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
         for index, batch in enumerate(old.publication or []):
             if batch["github_id"]:
                 continue
-            posted = next(
-                (
-                    item
-                    for item in remote_reviews
-                    if item.get("user", {}).get("login") == github.settings.bot_login
-                    and batch["marker"] in item.get("body", "")
-                    and item.get("state") == "COMMENTED"
-                    and item.get("commit_id") == old.head_sha
-                ),
-                None,
+            posted = find_posted_batch(
+                remote_reviews,
+                bot_login = github.settings.bot_login,
+                marker=batch["marker"],
+                head_sha=old.head_sha,
             )
             if posted:
                 record_publication(old.id, index, posted["id"])
@@ -187,16 +199,11 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
         if batch["github_id"]:
             continue
         remote_reviews = await github.pages(token, root)
-        posted = next(
-            (
-                item
-                for item in remote_reviews
-                if item.get("user", {}).get("login") == github.settings.bot_login
-                and batch["marker"] in item.get("body", "")
-                and item.get("state") == "COMMENTED"
-                and item.get("commit_id") == review.head_sha
-            ),
-            None,
+        posted = find_posted_batch(
+            remote_reviews,
+            bot_login=github.settings.bot_login,
+            marker=batch["marker"],
+            head_sha=review.head_sha,
         )
         if not posted:
             await guard()
