@@ -156,6 +156,21 @@ def find_posted_batch(remote_reviews, *, bot_login, marker, head_sha):
     return None
 
 
+def recover_publications(previous_runs, remote_reviews, bot_login):
+    for old in previous_runs:
+        for index, batch in enumerate(old.publication or []):
+            if batch["github_id"]:
+                continue
+            posted = find_posted_batch(
+                remote_reviews,
+                bot_login = bot_login,
+                marker=batch["marker"],
+                head_sha=old.head_sha,
+            )
+            if posted:
+                record_publication(old.id, index, posted["id"])
+
+
 async def act(github: GitHub, token: str, full_name: str, review_id: str, guard):
     await guard()
     with transaction() as db:
@@ -171,20 +186,7 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
         )
     root = f"{repo_path(full_name)}/pulls/{review.pr_number}/reviews"
     remote_reviews = await github.pages(token, root)
-    # 이전 실행의 게시 응답이 유실된 뒤 superseded가 되어도 통계용 게시 기록을 복구한다.
-    # 복구한 기록은 현재 리뷰의 지적을 제외하는 데 사용하지 않는다.
-    for old in previous_runs:
-        for index, batch in enumerate(old.publication or []):
-            if batch["github_id"]:
-                continue
-            posted = find_posted_batch(
-                remote_reviews,
-                bot_login = github.settings.bot_login,
-                marker=batch["marker"],
-                head_sha=old.head_sha,
-            )
-            if posted:
-                record_publication(old.id, index, posted["id"])
+    recover_publications(previous_runs, remote_reviews, github.settings.bot_login)
     with transaction() as db:
         review = db.get(Review, review_id)
         if review.publication is None:
