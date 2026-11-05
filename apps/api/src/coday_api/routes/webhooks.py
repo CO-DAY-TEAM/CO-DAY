@@ -6,6 +6,7 @@ from coday_core.db.models import Delivery
 from coday_core.errors import ServiceError
 from coday_pipeline.ingest.service import apply_revocation, should_process, verify_signature
 from fastapi import APIRouter, Request
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 
 router = APIRouter(prefix="/api/webhooks")
@@ -51,7 +52,7 @@ async def webhook(request: Request):
     if not should_process(event, payload, request.app.state.settings.github_app_slug):
         return {"accepted": True}
     with transaction() as db:
-        inserted = db.execute(
+        accepted = db.execute(
             insert(Delivery)
             .values(
                 id=delivery_id,
@@ -59,9 +60,20 @@ async def webhook(request: Request):
                 payload=payload,
                 status="completed" if event == "ping" else "queued",
             )
-            .on_conflict_do_nothing()
+            # 같은 ID면 기존 줄을 고침
+            .on_conflict_do_update(
+                # 같은 id인지 확인
+                index_elements=[Delivery.id],
+                set_={
+                    "status": "queued",
+                    "attempts": 0,
+                    "available_at": func.now(),
+                    "error_code": None,
+                },
+                where=Delivery.status == "failed",
+            )
             .returning(Delivery.id)
         ).scalar()
-        if inserted:
+        if accepted:
             apply_revocation(db, event, payload)
     return {"accepted": True}
