@@ -7,10 +7,8 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 from agents import set_default_openai_client, set_tracing_disabled
-from coday_contracts.review_result import Finding
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import AnalyzedFile, Finding, ReviewInput, ReviewResult, ReviewSettings
 from coday_core.config import Settings
-from coday_pipeline.analyze.chunker import chunks
 from coday_pipeline.analyze.diff_parser import parse_header, parse_patch
 from coday_pipeline.analyze.file_filter import decode, exclusion
 from coday_pipeline.judge.service import judge
@@ -75,7 +73,7 @@ def related_files(repo, head, changes, settings, patterns):
             or path in changed
             or exclusion(path, patterns)
             or p.name.upper() in {"AGENTS.MD", "CLAUDE.MD", "GEMINI.MD"}
-            or int(size) > settings.chunk_chars
+            or int(size) > settings.max_related_file_bytes
         ):
             continue
 
@@ -161,6 +159,8 @@ async def review() -> None:
 
     # 공식 출력, 변환 전 리뷰, HEAD 좌표가 없어 제외한 지적을 각각 모은다.
     findings, original, omitted = [], [], 0
+    inputs = ReviewInput(related_files=context)
+    locations = {}
     statuses = {
         "A": "added",
         "D": "removed",
@@ -198,51 +198,56 @@ async def review() -> None:
                 continue
 
             hunks = parse_patch(patch)
-            parts = chunks(path, statuses.get(status, "changed"), hunks, settings.chunk_chars)
+            additions = sum(line.kind == "added" for hunk in hunks for line in hunk.lines)
+            deletions = sum(line.kind == "removed" for hunk in hunks for line in hunk.lines)
+            if not additions and not deletions:
+                continue
+            inputs.files.append(
+                AnalyzedFile(file_path=path, status=statuses.get(status, "changed"), hunks=hunks)
+            )
 
             # HEAD의 줄 수는 삭제 전 지적을 현재 파일의 유효한 좌표로 옮길 때 사용한다.
             content = b"" if status == "D" else git(repo, "show", f"{head}:{path}")
             line_count = content.count(b"\n") + int(bool(content) and not content.endswith(b"\n"))
 
-            for chunk in parts:
-                # CO-DAY의 리뷰 생성 함수다. ReviewBench 채점은 컨테이너 밖에서 수행한다.
-                # 추가 리뷰 지시문은 사용하지 않으므로 세 번째 인자에 빈 문자열을 전달한다.
-                result = await judge(chunk, context, "", settings, reserve)
+            locations[path] = (hunks, line_count)
 
-                for finding in result.findings:
-                    original.append(finding.model_dump())
-                    location = head_location(finding, hunks, line_count)
-                    if location is None:
-                        omitted += 1
-                        continue
+        # 운영 워커와 동일하게 전체 PR을 한 번에 리뷰한다.
+        result = await judge(inputs, "", settings, reserve) if inputs.files else ReviewResult()
+        for finding in result.findings:
+            hunks, line_count = locations[finding.path]
+            original.append(finding.model_dump())
+            location = head_location(finding, hunks, line_count)
+            if location is None:
+                omitted += 1
+                continue
 
-                    message = "\n".join(
-                        [
-                            finding.title,
-                            f"발생 조건: {finding.condition}",
-                            f"코드 근거: {finding.evidence}",
-                            f"수정 방향: {finding.recommendation}",
-                        ]
-                    )
+            message = "\n".join(
+                [
+                    finding.title,
+                    f"발생 조건: {finding.condition}",
+                    f"코드 근거: {finding.evidence}",
+                    f"수정 방향: {finding.recommendation}",
+                ]
+            )
 
-                    if finding.side == "LEFT":
-                        message = (
-                            f"삭제 전 {finding.start_line or finding.line}–{finding.line}행: "
-                            + message
-                        )
+            if finding.side == "LEFT":
+                message = (
+                    f"삭제 전 {finding.start_line or finding.line}–{finding.line}행: " + message
+                )
 
-                    if finding.suggestion:
-                        message += f"\n```suggestion\n{finding.suggestion}\n```"
+            if finding.suggestion:
+                message += f"\n```suggestion\n{finding.suggestion}\n```"
 
-                    findings.append(
-                        {
-                            "file": finding.path,
-                            "start_line": location[0],
-                            "end_line": location[1],
-                            "message": message,
-                            "producer": producer,
-                        }
-                    )
+            findings.append(
+                {
+                    "file": finding.path,
+                    "start_line": location[0],
+                    "end_line": location[1],
+                    "message": message,
+                    "producer": producer,
+                }
+            )
 
         out = Path(os.environ["RB_OUT"])
         out.parent.mkdir(parents=True, exist_ok=True)

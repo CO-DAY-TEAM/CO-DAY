@@ -97,13 +97,6 @@ class Review(Base):
     )
 
 
-class UnitResult(Base):
-    __tablename__ = "unit_results"
-    review_id: Mapped[str] = mapped_column(ForeignKey("reviews.id"), primary_key=True)
-    unit: Mapped[int] = mapped_column(Integer, primary_key=True)
-    result: Mapped[dict] = mapped_column(JSON)
-
-
 class PostedFinding(Base):
     __tablename__ = "posted_findings"
     repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), primary_key=True)

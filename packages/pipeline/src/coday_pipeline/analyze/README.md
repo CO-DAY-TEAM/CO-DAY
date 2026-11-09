@@ -1,22 +1,22 @@
 # analyze
 
 ### 1. 폴더 구조 세분화
-- 수집 → 필터링 → diff 파싱 → 청크 분할의 흐름
+- 수집 → 필터링 → diff 파싱·검증 → 전체 PR 입력 구성의 흐름
 - 장점: 파일마다 하는 일이 하나라 읽기 쉬움
 
 ```
 analyze/
 ├── __init__.py        # 공개: analyze 하나만
-├── service.py         # 진입 함수 analyze(): 수집·파싱·분할 연결
+├── service.py         # 진입 함수 analyze(): 수집·파싱·검증·입력 구성
 ├── collector.py       # GitHub PR patch와 관련 코드 수집
 ├── diff_parser.py     # patch 문자열 → hunk와 줄 번호
 ├── file_filter.py     # 리뷰할 파일인지 판단
-├── chunker.py         # hunk → AnalyzedChunk 목록
 └── tests/
     ├── test_diff_parser.py
-    ├── test_file_filter.py
-    └── test_chunker.py
+    └── test_file_filter.py
 ```
+
+Analyze에서 파싱한 hunk와 줄 정보를 파일별로 묶어 Judge에 전달합니다.
 
 ### 2. `service.py`에 넣지 말아야 할 것
 

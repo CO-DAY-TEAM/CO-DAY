@@ -1,4 +1,4 @@
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import ReviewSettings
 from coday_pipeline.analyze.file_filter import exclusion
 
 

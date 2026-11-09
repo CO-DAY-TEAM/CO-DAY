@@ -1,11 +1,8 @@
-# 수집 → diff 파싱 → chunk 분할 순서로 분석 입력을 구성
-from coday_contracts.review_input import ReviewInput
-from coday_contracts.review_job import ReviewJob
-from coday_contracts.settings import ReviewSettings
+# 수집 → diff 파싱·검증 → 파일별로 묶어 전체 PR 입력 구성
+from coday_contracts import AnalyzedFile, ReviewInput, ReviewJob, ReviewSettings
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub
 
-from coday_pipeline.analyze.chunker import chunks
 from coday_pipeline.analyze.collector import collect
 from coday_pipeline.analyze.diff_parser import parse_patch
 
@@ -27,8 +24,6 @@ async def analyze(
             raise ServiceError(
                 "incomplete_diff", f"GitHub에서 {file.path}의 전체 변경 내용을 가져오지 못했습니다."
             )
-        parts = chunks(file.path, file.status, hunks, github.settings.chunk_chars)
-        if parts:
-            output.chunks.extend(parts)
-            output.analyzed_files.append(file.path)
+        if additions or deletions:
+            output.files.append(AnalyzedFile(file_path=file.path, status=file.status, hunks=hunks))
     return output

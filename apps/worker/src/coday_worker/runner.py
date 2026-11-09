@@ -5,13 +5,10 @@ import logging
 from datetime import timedelta
 
 from agents import trace
-from coday_contracts.review_input import ReviewInput
-from coday_contracts.review_job import ReviewJob
-from coday_contracts.review_result import ReviewResult
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import ReviewInput, ReviewJob, ReviewResult, ReviewSettings
 from coday_core.access import disable_access, effective_settings
 from coday_core.db import engine, transaction
-from coday_core.db.models import Delivery, Installation, Repository, Review, UnitResult, now
+from coday_core.db.models import Delivery, Installation, Repository, Review, now
 from coday_core.errors import GitHubError, ServiceError, Stopped
 from coday_core.github import GitHub, repo_path
 from coday_pipeline.act.service import act, progress
@@ -192,39 +189,27 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
         with transaction() as db:
             existing_result = db.get(Review, review_id).result
         if existing_result is None:
-            findings = []
-            for index, chunk in enumerate(inputs.chunks):
+            if inputs.files:
                 await guard()
-                with transaction() as db:
-                    saved = db.get(UnitResult, (review_id, index))
-                if saved:
-                    output = ReviewResult.model_validate(saved.result)
-                else:
-                    try:
-                        output = await judge(
-                            chunk,
-                            inputs.related_files,
-                            review.settings.get("instructions", ""),
-                            github.settings.model_copy(update={"openai_model": review.model}),
-                            reserve_ai_call,
-                        )
-                    except ServiceError:
-                        raise
-                    except Exception as error:
-                        raise ServiceError(
-                            "analysis_failed",
-                            "AI 분석에 실패했습니다. 완료된 분석은 보존되어 재시도할 수 있습니다.",
-                        ) from error
-                    with transaction() as db:
-                        db.add(
-                            UnitResult(review_id=review_id, unit=index, result=output.model_dump())
-                        )
-                findings.extend(output.findings)
-            # 모든 분석 단위의 지적을 모아 전체 리뷰 결과로 저장한다.
-            result = {"findings": [finding.model_dump() for finding in findings]}
+                try:
+                    output = await judge(
+                        inputs,
+                        review.settings.get("instructions", ""),
+                        github.settings.model_copy(update={"openai_model": review.model}),
+                        reserve_ai_call,
+                    )
+                except ServiceError:
+                    raise
+                except Exception as error:
+                    raise ServiceError(
+                        "analysis_failed",
+                        "AI 분석에 실패했습니다. 저장된 입력으로 다시 시도할 수 있습니다.",
+                    ) from error
+            else:
+                output = ReviewResult()
             with transaction() as db:
                 current = db.get(Review, review_id)
-                current.result, current.stage = result, "publish"
+                current.result, current.stage = output.model_dump(), "publish"
         await guard()
         await progress(
             github,
@@ -241,7 +226,7 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
             has_findings = bool(db.get(Review, review_id).result["findings"])
         description = (
             "리뷰 대상 없음"
-            if not inputs.chunks
+            if not inputs.files
             else ("리뷰 결과를 게시했습니다." if has_findings else "지적 없음")
         )
         await progress(github, token, repo.full_name, review, "완료", github.settings, description)
