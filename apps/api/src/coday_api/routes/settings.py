@@ -1,5 +1,5 @@
 # 리뷰 설정 관리 라우트
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import ReviewSettings
 from coday_core.access import effective_settings, owner_access
 from coday_core.db import transaction
 from coday_core.db.models import Installation, Repository, Review, now

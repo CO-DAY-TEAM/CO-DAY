@@ -3,15 +3,9 @@
 import re
 from typing import NamedTuple
 
-from coday_contracts import DiffLine
-from pydantic import BaseModel
+from coday_contracts import DiffLine, ParsedHunk
 
-# DiffLine은 coday_contracts/analyzed_chunk.py에 있는 클래스를 사용한다.
-
-
-class ParsedHunk(BaseModel):
-    header: str  # @@ -10,4 +10,5 @@ def add
-    lines: list[DiffLine]
+# 파싱한 hunk와 줄 정보는 contracts의 자료형으로 Judge까지 전달한다.
 
 
 class SplitHeader(NamedTuple):

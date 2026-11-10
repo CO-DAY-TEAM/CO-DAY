@@ -6,9 +6,7 @@ from datetime import timedelta
 
 import pytest
 from coday_api.main import app
-from coday_contracts.review_input import ReviewInput
-from coday_contracts.review_result import Finding, ReviewResult
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import AnalyzedFile, Finding, ReviewInput, ReviewResult, ReviewSettings
 from coday_core.access import (
     repository_access,
     upsert_installation,
@@ -22,12 +20,10 @@ from coday_core.db.models import (
     PostedFinding,
     Repository,
     Review,
-    UnitResult,
     now,
 )
 from coday_core.errors import GitHubError, ServiceError
 from coday_core.queue import enqueue, retry_review
-from coday_pipeline.analyze.chunker import chunks
 from coday_pipeline.analyze.diff_parser import parse_patch
 from coday_pipeline.ingest.service import ingest
 from coday_worker import runner
@@ -236,29 +232,32 @@ async def test_manual_review_reanalyzes_and_republishes_current_head(
         assert db.scalar(select(func.count()).select_from(PostedFinding)) == 2
 
 
-# 실패 후 재시도하면 완료된 분석을 재사용하고 최초 설정을 유지하는지 확인한다.
-async def test_retry_reuses_successful_units_and_frozen_configuration(github, monkeypatch):
+# 실패 후 재시도하면 전체 입력과 최초 설정을 유지하는지 확인한다.
+async def test_retry_reuses_full_input_and_frozen_configuration(github, monkeypatch):
     review_id = await enqueue(github, 20, 1, "retry", "manual", "owner")
-    parts = chunks("a.py", "added", parse_patch("@@ -0,0 +1 @@\n+x = 1\n"), 1000) + chunks(
-        "b.py", "added", parse_patch("@@ -0,0 +1 @@\n+y = 2\n"), 1000
-    )
+    files = [
+        AnalyzedFile(
+            file_path="a.py", status="added", hunks=parse_patch("@@ -0,0 +1 @@\n+x = 1\n")
+        ),
+        AnalyzedFile(
+            file_path="b.py", status="added", hunks=parse_patch("@@ -0,0 +1 @@\n+y = 2\n")
+        ),
+    ]
     with transaction() as db:
         review = db.get(Review, review_id)
-        review.input = ReviewInput(chunks=parts, analyzed_files=["a.py", "b.py"]).model_dump()
+        review.input = ReviewInput(files=files).model_dump()
         review.stage = "judge"
     calls = []
 
-    async def broken(chunk, related, instructions, settings, reserve_attempt):
-        calls.append(chunk.file_path)
-        if chunk.file_path == "b.py":
-            raise RuntimeError("재시도 확인을 위해 발생시킨 오류")
-        return ReviewResult()
+    async def broken(inputs, instructions, settings, reserve_attempt):
+        calls.append(inputs.files)
+        raise RuntimeError("재시도 확인을 위해 발생시킨 오류")
 
     monkeypatch.setattr(runner, "judge", broken)
     await execute(github, review_id)
     with transaction() as db:
         assert db.get(Review, review_id).status == "failed"
-        assert db.scalar(select(func.count()).select_from(UnitResult)) == 1
+        assert db.get(Review, review_id).result is None
         install = db.get(Installation, 1)
         install.settings = {
             **install.settings,
@@ -267,15 +266,15 @@ async def test_retry_reuses_successful_units_and_frozen_configuration(github, mo
         }
     assert not github.remote_reviews
 
-    async def recovered(chunk, related, instructions, settings, reserve_attempt):
-        calls.append(chunk.file_path)
+    async def recovered(inputs, instructions, settings, reserve_attempt):
+        calls.append(inputs.files)
         assert instructions == ""
         return ReviewResult()
 
     monkeypatch.setattr(runner, "judge", recovered)
     await retry_review(github, review_id, "owner")
     await execute(github, review_id)
-    assert calls == ["a.py", "b.py", "b.py"]
+    assert calls == [files, files]
     assert len(github.remote_reviews) == 1
     with transaction() as db:
         assert db.get(Review, review_id).status == "completed"
@@ -283,7 +282,11 @@ async def test_retry_reuses_successful_units_and_frozen_configuration(github, mo
 
 # 게시 응답이 유실되어 재시도해도 리뷰를 중복 게시하거나 통계를 중복 집계하지 않는지 확인한다.
 async def test_lost_publication_response_recovers_without_duplicate(github, monkeypatch):
+    calls = 0
+
     async def judge(*args):
+        nonlocal calls
+        calls += 1
         return ReviewResult(findings=[finding()])
 
     monkeypatch.setattr(runner, "judge", judge)
@@ -295,6 +298,7 @@ async def test_lost_publication_response_recovers_without_duplicate(github, monk
     await retry_review(github, review_id, "owner")
     await execute(github, review_id)
     assert github.post_count == 1
+    assert calls == 1
     with transaction() as db:
         assert db.get(Review, review_id).status == "completed"
         assert db.scalar(select(func.count()).select_from(PostedFinding)) == 1

@@ -1,6 +1,5 @@
 import pytest
-from coday_contracts.review_input import ReviewInput
-from coday_contracts.review_result import ReviewResult
+from coday_contracts import AnalyzedFile, DiffLine, ParsedHunk, ReviewInput, ReviewResult
 from coday_core.db.models import Review
 from coday_pipeline.act.service import build_publication
 
@@ -29,7 +28,22 @@ def finding_data(**updates):
 def test_server_renders_sections_and_only_one_suggestion(suggestion):
     result = ReviewResult.model_validate({"findings": [finding_data(suggestion=suggestion)]})
     batches = build_publication(
-        Review(id="test", head_sha="head"), result, ReviewInput(analyzed_files=["links.ts"])
+        Review(id="test", head_sha="head"),
+        result,
+        ReviewInput(
+            files=[
+                AnalyzedFile(
+                    file_path="links.ts",
+                    status="added",
+                    hunks=[
+                        ParsedHunk(
+                            header="@@ -0,0 +1 @@",
+                            lines=[DiffLine(kind="added", content="const href = url;", new_line=1)],
+                        )
+                    ],
+                )
+            ]
+        ),
     )
     body = batches[0]["comments"][0]["body"]
     assert all(label in body for label in ("발생 조건", "코드 근거", "수정 방향"))

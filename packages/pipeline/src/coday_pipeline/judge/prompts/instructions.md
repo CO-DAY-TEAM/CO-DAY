@@ -29,7 +29,7 @@ Write every title and explanation in Korean.
 
 ## Location
 
-- line must be one of the changed lines in the given chunk. Use LEFT for removed lines and RIGHT for added lines.
+- Review the given files together as one PR. line must be one of the changed lines in the specified file. Use LEFT for removed lines and RIGHT for added lines.
 
 ## suggestion
 
