@@ -1,4 +1,4 @@
-# 분석된 코드 청크(AnalyzedChunk) 계약 스키마
+# 분석된 파일과 diff 줄 정보의 계약 스키마
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,12 +24,16 @@ class DiffLine(BaseModel):
     )
 
 
-class AnalyzedChunk(BaseModel):
-    """판단 단계에 넘길 변경 조각. 한 파일의 hunk 하나(또는 그 일부)."""
+class ParsedHunk(BaseModel):
+    header: str  # @@ -10,4 +10,5 @@ def add
+    lines: list[DiffLine]
+
+
+class AnalyzedFile(BaseModel):
+    """판단 단계에 넘길 한 파일의 전체 hunk와 줄 정보."""
 
     model_config = ConfigDict(frozen=True)
 
     file_path: str = Field(min_length=1)
     status: FileStatus
-    hunk_header: str = Field(description="원본 hunk 헤더 (예: @@ -10,4 +10,5 @@ def add)")
-    lines: tuple[DiffLine, ...] = Field(min_length=1)
+    hunks: list[ParsedHunk] = Field(min_length=1)

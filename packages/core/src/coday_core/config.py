@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     max_file_bytes: int = Field(default=2_000_000, ge=1000)
     # 전체 입력 크기 제한(바이트)
     max_input_bytes: int = Field(default=20_000_000, ge=1000)
-    # 분석 청크의 최대 문자 수
-    chunk_chars: int = Field(default=18000, ge=500)
+    # 관련 파일 후보의 최대 크기(바이트)
+    max_related_file_bytes: int = Field(default=18000, ge=500)
     # 함께 조회할 관련 파일 수
     related_file_count: int = Field(default=5, ge=0, le=20)
     # 외부 요청의 내부 재시도 횟수

@@ -1,0 +1,14 @@
+# 기본적으로 제외한 뒤 이미지 빌드에 필요한 파일만 허용
+**
+
+!pyproject.toml
+!uv.lock
+!packages/**
+!apps/api/pyproject.toml
+!apps/worker/pyproject.toml
+!evals/reviewbench/agent.py
+
+# 허용한 디렉터리 안에서도 로컬 생성 파일과 인증 정보는 제외
+**/__pycache__/**
+**/.env
+**/*.pem

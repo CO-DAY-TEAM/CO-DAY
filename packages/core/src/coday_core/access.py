@@ -1,4 +1,4 @@
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import ReviewSettings
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 

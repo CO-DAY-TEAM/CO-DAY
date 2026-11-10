@@ -1,8 +1,7 @@
 # 리뷰 결과를 GitHub PR에 게시
 import hashlib
 
-from coday_contracts.review_input import ReviewInput
-from coday_contracts.review_result import ReviewResult
+from coday_contracts import ReviewInput, ReviewResult
 from coday_core.config import Settings
 from coday_core.db import transaction
 from coday_core.db.models import PostedFinding, PullRequest, Review
@@ -25,8 +24,10 @@ def plain(text: str) -> str:
 
 def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput):
     summary = f"## CO-DAY 리뷰\n\n분석 커밋: `{review.head_sha[:12]}`\n\n"
-    summary += f"분석 파일 **{len(inputs.analyzed_files)}개** · 제외 파일 **{len(inputs.excluded_files)}개**\n\n"
-    if not inputs.chunks:
+    summary += (
+        f"분석 파일 **{len(inputs.files)}개** · 제외 파일 **{len(inputs.excluded_files)}개**\n\n"
+    )
+    if not inputs.files:
         summary += "리뷰 대상 없음: 제외 규칙 적용 후 분석할 텍스트 변경이 없습니다.\n"
     elif not result.findings:
         summary += "지적 없음: 분석 범위에서 게시할 문제를 발견하지 못했습니다.\n"

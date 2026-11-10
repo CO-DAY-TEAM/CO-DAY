@@ -141,23 +141,11 @@ def upgrade():
         postgresql_where=sa.text("status IN ('queued', 'running')"),
         sqlite_where=sa.text("status IN ('queued', 'running')"),
     )
-    op.create_table(
-        "unit_results",
-        sa.Column("review_id", sa.String(length=36), nullable=False),
-        sa.Column("unit", sa.Integer(), nullable=False),
-        sa.Column("result", sa.JSON(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["review_id"],
-            ["reviews.id"],
-        ),
-        sa.PrimaryKeyConstraint("review_id", "unit"),
-    )
     # Alembic 자동 생성 명령 끝
 
 
 def downgrade():
     # Alembic이 자동 생성한 마이그레이션 명령이며, 적용 전에 내용을 확인한다.
-    op.drop_table("unit_results")
     op.drop_index(
         "one_active_review_per_pr",
         table_name="reviews",

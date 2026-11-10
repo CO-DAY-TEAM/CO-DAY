@@ -155,6 +155,6 @@ async def retry_review(github: GitHub, review_id: str, login: str):
         review.recoveries = 0
         review.heartbeat_at = None
         review.updated_at = now()
-        # 재시도 시 AI 호출 횟수를 초기화하고, 성공한 분석 단위는 재사용한다.
+        # 재시도 시 AI 호출 횟수를 초기화하고, 저장된 입력과 전체 리뷰 결과는 재사용한다.
         review.ai_calls = 0
         return review.id

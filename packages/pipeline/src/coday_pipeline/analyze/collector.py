@@ -2,9 +2,7 @@
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from coday_contracts.analyzed_chunk import FileStatus
-from coday_contracts.review_job import ReviewJob
-from coday_contracts.settings import ReviewSettings
+from coday_contracts import FileStatus, ReviewJob, ReviewSettings
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
 
@@ -92,7 +90,7 @@ async def collect(
             or path in changed
             or exclusion(path, settings.exclude_patterns)
             or p.name.upper() in {"AGENTS.MD", "CLAUDE.MD", "GEMINI.MD"}
-            or item.get("size", 0) > github.settings.chunk_chars
+            or item.get("size", 0) > github.settings.max_related_file_bytes
         ):
             continue
         related = any(stem and stem.lower() in p.stem.lower() for stem in stems)
