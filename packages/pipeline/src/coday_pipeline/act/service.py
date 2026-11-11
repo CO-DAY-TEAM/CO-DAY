@@ -9,12 +9,19 @@ from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
 from sqlalchemy import select
 
+from coday_pipeline.act.markdown import escape_prose_tildes
+from coday_pipeline.suggestion_conflicts import resolve_suggestion_conflicts
+
 CATEGORIES = {
     "bug": "버그",
     "security": "보안",
+    "performance": "성능",
     "style": "스타일",
     "maintainability": "유지보수성",
 }
+
+
+SEVERITIES = {"P0": "Critical", "P1": "High", "P2": "Medium", "P3": "Low"}
 
 
 def plain(text: str) -> str:
@@ -22,7 +29,12 @@ def plain(text: str) -> str:
     return text.replace("<", "&lt;").replace(">", "&gt;").replace("@", "@\u200b")
 
 
+def review_text(text: str) -> str:
+    return escape_prose_tildes(plain(text))
+
+
 def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput):
+    publication_result = resolve_suggestion_conflicts(result)
     summary = f"## CO-DAY 리뷰\n\n분석 커밋: `{review.head_sha[:12]}`\n\n"
     summary += (
         f"분석 파일 **{len(inputs.files)}개** · 제외 파일 **{len(inputs.excluded_files)}개**\n\n"
@@ -39,22 +51,25 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
     batches, comments, metadata, length = [], [], [], len(summary)
     body = summary
     seen = set()
-    for position, finding in enumerate(result.findings):
+    for position, finding in enumerate(publication_result.findings):
         # 이번 리뷰 결과 안에서 완전히 같은 지적만 제거하고, 이전 리뷰와는 비교하지 않는다.
-        signature = finding.model_dump_json()
+        signature = result.findings[position].model_dump_json()
         if signature in seen:
             continue
         seen.add(signature)
         # 리뷰 실행 ID와 결과 내 위치로 각 게시 항목의 fingerprint를 만든다.
         key = hashlib.sha256(f"{review.id}:{position}".encode()).hexdigest()
-        text = f"**[{CATEGORIES[finding.category]}] {plain(finding.title)}**"
+        text = (
+            f"**[{CATEGORIES[finding.category]}] "
+            f"[{SEVERITIES[finding.severity]} ({finding.severity})] {review_text(finding.title)}**"
+        )
         for label, value in (
             ("발생 조건", finding.condition),
             ("코드 근거", finding.evidence),
             ("수정 방향", finding.recommendation),
         ):
-            text += f"\n\n**{label}**\n\n{plain(value)}"
-        if finding.suggestion is not None and finding.importance == "important":
+            text += f"\n\n**{label}**\n\n{review_text(value)}"
+        if finding.suggestion is not None and finding.severity != "P3":
             text += f"\n\n```suggestion\n{finding.suggestion}\n```"
         if len(comments) >= 40 or length + len(text) > 50000:
             batches.append(
@@ -67,7 +82,7 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             )
             body, comments, metadata, length = "## CO-DAY 리뷰 · 계속\n", [], [], 0
         metadata.append({"fingerprint": key, "category": finding.category})
-        if finding.importance == "minor":
+        if finding.severity == "P3":
             body += f"\n### {plain(finding.path)}:{finding.line}\n{text}\n"
         else:
             comment = {
