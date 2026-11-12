@@ -9,8 +9,19 @@ from pathlib import Path, PurePosixPath
 from agents import set_default_openai_client, set_tracing_disabled
 from coday_contracts import AnalyzedFile, Finding, ReviewInput, ReviewResult, ReviewSettings
 from coday_core.config import Settings
+from coday_pipeline.analyze.configuration import (
+    CONFIG_SUFFIXES,
+    configuration_priorities,
+    patch_source,
+)
 from coday_pipeline.analyze.diff_parser import parse_header, parse_patch
 from coday_pipeline.analyze.file_filter import decode, exclusion
+from coday_pipeline.analyze.imports import (
+    SOURCE_SUFFIXES,
+    eligible_context,
+    import_priorities,
+    related_candidates,
+)
 from coday_pipeline.judge.service import judge
 from openai import AsyncOpenAI
 
@@ -49,47 +60,94 @@ def changed_files(repo: Path, base: str, head: str) -> list[tuple[str, str, str]
     return result
 
 
-def related_files(repo, head, changes, settings, patterns):
-    """운영 collector와 같은 파일명/디렉터리 우선순위로 Git 객체에서 문맥을 읽는다."""
-
+def related_files(repo, head, changes, settings, patterns, *, base=None, repository=""):
+    """Use the same direct-import and fallback ranking as the production collector."""
+    if settings.related_file_count == 0:
+        return {}
     changed = {path for _, _, path in changes}
-    stems = {PurePosixPath(p).stem.removeprefix("test_").removesuffix(".test") for p in changed}
-    directories = {str(PurePosixPath(p).parent) for p in changed}
-    candidates = []
-
+    metadata = {}
     for entry in git(repo, "ls-tree", "-rlz", "--full-tree", head).split(b"\0"):
         if not entry:
             continue
-
         meta, raw_path = entry.split(b"\t", 1)
         mode, kind, oid, size = meta.decode().split()
-        path = raw_path.decode("utf-8")
-        p = PurePosixPath(path)
-
-        # 일반 파일만 문맥에 포함한다. 지침 파일 제외는 기존 CO-DAY 수집 정책을 따른다.
+        if kind == "blob" and mode in {"100644", "100755"}:
+            metadata[raw_path.decode("utf-8")] = (mode, oid, int(size))
+    paths = set(metadata)
+    imports = {}
+    configurations = {}
+    patches = {}
+    diff_bytes = 0
+    for status, old, path in changes:
+        if exclusion(path, patterns):
+            continue
+        raw = git(
+            repo,
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "--find-renames",
+            (base or os.environ["RB_BASE"]) + "..." + head,
+            "--",
+            old,
+            path,
+        )
+        diff_bytes += len(raw)
+        patch = decode(raw)
+        if patch is not None:
+            patches[path] = patch
+            if status == "D" and PurePosixPath(path).suffix in CONFIG_SUFFIXES:
+                configurations[path] = patch_source(patch, "old")
+    source_bytes = 0
+    for status, old, path in changes:
+        item = metadata.get(path)
         if (
-            kind != "blob"
-            or mode not in {"100644", "100755"}
-            or path in changed
+            item is None
             or exclusion(path, patterns)
-            or p.name.upper() in {"AGENTS.MD", "CLAUDE.MD", "GEMINI.MD"}
-            or int(size) > settings.max_related_file_bytes
+            or PurePosixPath(path).suffix not in SOURCE_SUFFIXES | CONFIG_SUFFIXES
+            or item[2] > settings.max_file_bytes
+            or source_bytes + item[2] > settings.max_input_bytes
         ):
             continue
-
-        # 파일명이 연관된 코드를 먼저, 같은 디렉터리의 코드를 다음 순위로 선택한다.
-        related = any(stem and stem.lower() in p.stem.lower() for stem in stems)
-        if related or str(p.parent) in directories:
-            candidates.append((0 if related else 1, path, oid))
-
+        patch = patches.get(path)
+        # Pure renames and files without text changes are not review sources.
+        if patch is None or not any(line.startswith("@@ ") for line in patch.splitlines()):
+            continue
+        source_bytes += item[2]
+        source = decode(git(repo, "cat-file", "blob", item[1]))
+        if source is None:
+            continue
+        if PurePosixPath(path).suffix in CONFIG_SUFFIXES:
+            configurations[path] = source
+        for target, rank in import_priorities(path, source, patch, paths).items():
+            imports[target] = min(rank, imports.get(target, rank))
+    for target, rank in configuration_priorities(
+        changed, configurations, paths, repository
+    ).items():
+        imports[target] = min(rank, imports.get(target, rank))
+    eligible = {
+        path
+        for path, (mode, _, size) in metadata.items()
+        if eligible_context(path, mode, size, settings.max_related_file_bytes, patterns)
+    }
+    candidates = related_candidates(changed, eligible, imports)
     result = {}
-
-    # 운영 collector처럼 후보 수를 먼저 제한하고, HEAD의 객체 ID로 내용을 읽는다.
-    for _, path, oid in sorted(candidates)[: settings.related_file_count]:
-        content = decode(git(repo, "cat-file", "blob", oid))
+    remaining = max(0, settings.max_input_bytes - diff_bytes)
+    reads = 0
+    for path in candidates:
+        if len(result) >= settings.related_file_count or reads >= 2 * settings.related_file_count:
+            break
+        if metadata[path][2] > remaining:
+            continue
+        raw = git(repo, "cat-file", "blob", metadata[path][1])
+        reads += 1
+        if not raw or len(raw) > min(settings.max_related_file_bytes, remaining):
+            continue
+        content = decode(raw)
         if content is not None:
             result[path] = content
-
+            remaining -= len(raw)
     return result
 
 
@@ -145,7 +203,9 @@ async def review() -> None:
     # 변경·관련 코드를 모으고, CO-DAY의 입력 크기 및 호출 횟수 제한을 적용한다.
     changes = changed_files(repo, base, head)
     patterns = ReviewSettings().exclude_patterns
-    context = related_files(repo, head, changes, settings, patterns)
+    context = related_files(
+        repo, head, changes, settings, patterns, base=base, repository=pr["repo"]
+    )
     total_bytes = sum(len(text.encode()) for text in context.values())
     attempts = 0
 

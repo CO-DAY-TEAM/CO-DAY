@@ -8,6 +8,7 @@ dependencies = [
     "openai-agents>=0.23.1,<1",
     "langfuse==5.0.2",
     "openinference-instrumentation-openai-agents==2.5.3",
+    "PyYAML>=6,<7",
 ]
 
 [build-system]

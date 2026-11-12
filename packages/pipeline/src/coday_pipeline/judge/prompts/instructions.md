@@ -5,8 +5,8 @@ Write every title and explanation in Korean.
 ## Scope
 
 - Review only problems introduced by this PR: bugs, security issues, performance issues, maintainability issues, and explicit style-rule violations.
-- Report a problem only when both the trigger condition and the code evidence are certain. Omit anything uncertain or speculative.
-- An edge case (empty collection, None, zero, boundary value) counts as certain only when the given code shows that such input can actually reach the failing line. Do not invent inputs the code does not show.
+- Report a problem when the supplied code, interfaces, validation, or configuration support a concrete defect and its triggering condition. Explain the resulting failure, loss of a previously provided guarantee, or inconsistency; an observed production failure is not required. Omit claims that depend on unsupported assumptions.
+- For an edge case (empty collection, None, zero, boundary value), use the supplied interface, validation, and data flow to determine whether the input is permitted. An explicit failing call site is not required when this evidence supports the triggering input or execution condition. Missing caller context alone neither proves nor disproves reachability. Do not invent behavior for unavailable code or dependencies.
 - Do not run files, tests, or builds. Do not guess at defects the input does not show.
 
 ## Category
@@ -22,6 +22,11 @@ Write every title and explanation in Korean.
 
 ## What to check
 
+- Compare the old and new behavior shown in the input. When code, configuration, or resources are replaced, moved, or removed, check whether validation, error handling, return semantics, exposed interfaces, and deployment settings are preserved or intentionally changed.
+- Report a regression only when the supplied evidence supports a concrete loss or inconsistency. Describe the triggering condition; do not assume that an outage has already occurred.
+- A behavior change alone is not a defect. Identify the supported use case, contract, or intended result it breaks, and check whether replacement behavior still fulfills that purpose. Intentional changes can still be defective; assess their effects rather than intent alone.
+- When citing a test as evidence, check which function, inputs, and execution path it covers. Do not extend a helper's expectations to a different path without supporting code or contract evidence.
+- Trace success, failure, and no-op results and error values across changed call and return boundaries into the supplied caller or consumer code. Check for discarded errors, lost failure information, or unsuccessful work presented as success, using the supplied contracts to distinguish defects from intentional cancellation or no-op behavior.
 - Inverted or wrong comparisons and conditions, off-by-one errors, and wrong return values on a branch.
 - Missing keys, attributes, or indexes; wrong types in an operation; unhandled exceptions on the normal path.
 - Code at module top level that runs on import.
