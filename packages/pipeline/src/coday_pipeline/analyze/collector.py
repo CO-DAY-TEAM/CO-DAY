@@ -6,7 +6,18 @@ from coday_contracts import FileStatus, ReviewJob, ReviewSettings
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
 
+from coday_pipeline.analyze.configuration import (
+    CONFIG_SUFFIXES,
+    configuration_priorities,
+    patch_source,
+)
 from coday_pipeline.analyze.file_filter import decode, exclusion
+from coday_pipeline.analyze.imports import (
+    SOURCE_SUFFIXES,
+    eligible_context,
+    import_priorities,
+    related_candidates,
+)
 
 
 @dataclass(frozen=True)
@@ -77,32 +88,70 @@ async def collect(
             "관련 코드 탐색용 파일 목록이 잘렸습니다. 전체 목록을 확보하지 못했습니다.",
         )
     changed = {f["filename"] for f in files}
-    stems = {
-        PurePosixPath(path).stem.removeprefix("test_").removesuffix(".test") for path in changed
+    metadata = {
+        item["path"]: item
+        for item in tree["tree"]
+        if item["type"] == "blob" and item.get("mode", "100644") in {"100644", "100755"}
     }
-    directories = {str(PurePosixPath(path).parent) for path in changed}
-    candidates = []
-    for item in tree["tree"]:
-        path = item["path"]
-        p = PurePosixPath(path)
+    paths = set(metadata)
+    imports = {}
+    configurations = {}
+    source_bytes = 0
+    for file in output.files:
+        if file.status == "removed" and PurePosixPath(file.path).suffix in CONFIG_SUFFIXES:
+            configurations[file.path] = patch_source(file.patch, "old")
+        item = metadata.get(file.path)
         if (
-            item["type"] != "blob"
-            or path in changed
-            or exclusion(path, settings.exclude_patterns)
-            or p.name.upper() in {"AGENTS.MD", "CLAUDE.MD", "GEMINI.MD"}
-            or item.get("size", 0) > github.settings.max_related_file_bytes
+            item is None
+            or PurePosixPath(file.path).suffix not in SOURCE_SUFFIXES | CONFIG_SUFFIXES
+            or item.get("size", 0) > github.settings.max_file_bytes
+            or source_bytes + item.get("size", 0) > github.settings.max_input_bytes
         ):
             continue
-        related = any(stem and stem.lower() in p.stem.lower() for stem in stems)
-        nearby = str(p.parent) in directories
-        if related or nearby:
-            candidates.append((0 if related else 1, path))
-    for _, path in sorted(candidates)[: github.settings.related_file_count]:
         await guard()
-        content = decode(await github.file(token, name, path, job.head_sha))
+        raw = await github.file(token, name, file.path, job.head_sha)
+        source_bytes += len(raw)
+        source = decode(raw)
+        if source is None or source_bytes > github.settings.max_input_bytes:
+            continue
+        if PurePosixPath(file.path).suffix in CONFIG_SUFFIXES:
+            configurations[file.path] = source
+        for path, rank in import_priorities(file.path, source, file.patch, paths).items():
+            imports[path] = min(rank, imports.get(path, rank))
+    for path, rank in configuration_priorities(
+        changed, configurations, paths, f"https://github.com/{name}"
+    ).items():
+        imports[path] = min(rank, imports.get(path, rank))
+    eligible = {
+        path
+        for path, item in metadata.items()
+        if eligible_context(
+            path,
+            item.get("mode", "100644"),
+            item.get("size", 0),
+            github.settings.max_related_file_bytes,
+            settings.exclude_patterns,
+        )
+    }
+    candidates = related_candidates(changed, eligible, imports)
+    reads = 0
+    for path in candidates:
+        if (
+            len(output.related_files) >= github.settings.related_file_count
+            or reads >= 2 * github.settings.related_file_count
+        ):
+            break
+        if metadata[path].get("size", 0) > github.settings.max_input_bytes - total:
+            continue
+        await guard()
+        raw = await github.file(token, name, path, job.head_sha)
+        reads += 1
+        if not raw or len(raw) > min(
+            github.settings.max_related_file_bytes, github.settings.max_input_bytes - total
+        ):
+            continue
+        content = decode(raw)
         if content is not None:
             total += len(content.encode())
-            if total > github.settings.max_input_bytes:
-                raise ServiceError("input_limit", "관련 코드를 포함한 입력 처리 한도를 넘었습니다.")
             output.related_files[path] = content
     return output

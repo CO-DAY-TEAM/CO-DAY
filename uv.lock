@@ -388,6 +388,7 @@ dependencies = [
     { name = "langfuse" },
     { name = "openai-agents" },
     { name = "openinference-instrumentation-openai-agents" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -397,6 +398,7 @@ requires-dist = [
     { name = "langfuse", specifier = "==5.0.2" },
     { name = "openai-agents", specifier = ">=0.23.1,<1" },
     { name = "openinference-instrumentation-openai-agents", specifier = "==2.5.3" },
+    { name = "pyyaml", specifier = ">=6,<7" },
 ]
 
 [[package]]
