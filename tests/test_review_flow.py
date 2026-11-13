@@ -128,7 +128,7 @@ def github():
 def finding(path="calc.py", line=1):
     return Finding(
         category="bug",
-        importance="important",
+        severity="P1",
         title="0으로 나누기",
         condition="이 경로에서 나눗셈을 실행하면 예외가 발생합니다.",
         evidence="분모가 0입니다.",

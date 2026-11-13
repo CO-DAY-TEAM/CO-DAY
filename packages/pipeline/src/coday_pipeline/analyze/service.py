@@ -1,4 +1,6 @@
 # 수집 → diff 파싱·검증 → 파일별로 묶어 전체 PR 입력 구성
+import logging
+
 from coday_contracts import AnalyzedFile, ReviewInput, ReviewJob, ReviewSettings
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub
@@ -6,14 +8,20 @@ from coday_core.github import GitHub
 from coday_pipeline.analyze.collector import collect
 from coday_pipeline.analyze.diff_parser import parse_patch
 
+logger = logging.getLogger(__name__)
+
 
 async def analyze(
     job: ReviewJob, settings: ReviewSettings, github: GitHub, token: str, guard
 ) -> ReviewInput:
     collected = await collect(job, settings, github, token, guard)
+    if collected.context_audit:
+        logger.info("Function context selection: %s", collected.context_audit)
     output = ReviewInput(
         excluded_files=collected.excluded_files,
         related_files=collected.related_files,
+        function_context=collected.function_context,
+        context_audit=collected.context_audit,
     )
     for file in collected.files:
         hunks = parse_patch(file.patch)
