@@ -16,6 +16,8 @@ from coday_pipeline.analyze.configuration import (
 )
 from coday_pipeline.analyze.diff_parser import parse_header, parse_patch
 from coday_pipeline.analyze.file_filter import decode, exclusion
+from coday_pipeline.analyze.function_context import FunctionContextBuilder
+from coday_pipeline.analyze.import_aliases import config_candidates, parse_config
 from coday_pipeline.analyze.imports import (
     SOURCE_SUFFIXES,
     eligible_context,
@@ -60,7 +62,18 @@ def changed_files(repo: Path, base: str, head: str) -> list[tuple[str, str, str]
     return result
 
 
-def related_files(repo, head, changes, settings, patterns, *, base=None, repository=""):
+def related_files(
+    repo,
+    head,
+    changes,
+    settings,
+    patterns,
+    *,
+    base=None,
+    repository="",
+    function_context=None,
+    context_audit=None,
+):
     """Use the same direct-import and fallback ranking as the production collector."""
     if settings.related_file_count == 0:
         return {}
@@ -100,6 +113,50 @@ def related_files(repo, head, changes, settings, patterns, *, base=None, reposit
             if status == "D" and PurePosixPath(path).suffix in CONFIG_SUFFIXES:
                 configurations[path] = patch_source(patch, "old")
     source_bytes = 0
+    sources = {}
+    alias_configs = {}
+    config_paths = config_candidates(
+        {
+            path
+            for _, _, path in changes
+            if not exclusion(path, patterns)
+            and PurePosixPath(path).suffix in SOURCE_SUFFIXES - {".py"}
+        },
+        paths,
+    )
+    for number, path in enumerate(config_paths):
+        mode, oid, size = metadata[path]
+        reason = None
+        if number >= settings.related_file_count:
+            reason = "alias_config_count_limit"
+        elif not eligible_context(path, mode, size, settings.max_related_file_bytes, patterns):
+            reason = "alias_config_excluded_or_size"
+        elif source_bytes + size > settings.max_input_bytes:
+            reason = "alias_config_read_budget"
+        else:
+            raw = git(repo, "cat-file", "blob", oid)
+            source_bytes += len(raw)
+            content = decode(raw)
+            if (
+                content is None
+                or len(raw) > settings.max_related_file_bytes
+                or source_bytes > settings.max_input_bytes
+            ):
+                reason = "alias_config_decode_or_budget"
+            else:
+                try:
+                    alias_configs[path] = parse_config(path, content)
+                except (ValueError, RecursionError):
+                    reason = "alias_config_invalid_or_unsupported"
+        if context_audit is not None:
+            context_audit.append(
+                dict(
+                    path=path,
+                    head_sha=head,
+                    status="skipped" if reason else "resolved",
+                    reason=reason or "explicit_alias_config",
+                )
+            )
     for status, old, path in changes:
         item = metadata.get(path)
         if (
@@ -109,6 +166,21 @@ def related_files(repo, head, changes, settings, patterns, *, base=None, reposit
             or item[2] > settings.max_file_bytes
             or source_bytes + item[2] > settings.max_input_bytes
         ):
+            if context_audit is not None:
+                reason = (
+                    "source_missing"
+                    if item is None
+                    else "excluded_path"
+                    if exclusion(path, patterns)
+                    else "unsupported_language"
+                    if PurePosixPath(path).suffix not in SOURCE_SUFFIXES | CONFIG_SUFFIXES
+                    else "source_file_limit"
+                    if item[2] > settings.max_file_bytes
+                    else "source_read_budget"
+                )
+                context_audit.append(
+                    dict(path=path, head_sha=head, status="skipped", reason=reason, complete=False)
+                )
             continue
         patch = patches.get(path)
         # Pure renames and files without text changes are not review sources.
@@ -117,10 +189,23 @@ def related_files(repo, head, changes, settings, patterns, *, base=None, reposit
         source_bytes += item[2]
         source = decode(git(repo, "cat-file", "blob", item[1]))
         if source is None:
+            if context_audit is not None:
+                context_audit.append(
+                    dict(
+                        path=path,
+                        head_sha=head,
+                        status="skipped",
+                        reason="source_decode_or_budget",
+                        complete=False,
+                    )
+                )
             continue
+        sources[path] = (source, patch)
         if PurePosixPath(path).suffix in CONFIG_SUFFIXES:
             configurations[path] = source
-        for target, rank in import_priorities(path, source, patch, paths).items():
+        for target, rank in import_priorities(
+            path, source, patch, paths, alias_configs, context_audit
+        ).items():
             imports[target] = min(rank, imports.get(target, rank))
     for target, rank in configuration_priorities(
         changed, configurations, paths, repository
@@ -148,6 +233,18 @@ def related_files(repo, head, changes, settings, patterns, *, base=None, reposit
         if content is not None:
             result[path] = content
             remaining -= len(raw)
+    if function_context is not None:
+        context = FunctionContextBuilder(
+            head,
+            min(remaining, settings.related_file_count * settings.max_related_file_bytes),
+            settings.max_related_file_bytes,
+            settings.related_file_count,
+        )
+        for path, (source, patch) in sources.items():
+            context.add(path, source, patch)
+        function_context.extend(context.contexts)
+        if context_audit is not None:
+            context_audit.extend(context.audit)
     return result
 
 
@@ -203,10 +300,21 @@ async def review() -> None:
     # 변경·관련 코드를 모으고, CO-DAY의 입력 크기 및 호출 횟수 제한을 적용한다.
     changes = changed_files(repo, base, head)
     patterns = ReviewSettings().exclude_patterns
+    functions, context_audit = [], []
     context = related_files(
-        repo, head, changes, settings, patterns, base=base, repository=pr["repo"]
+        repo,
+        head,
+        changes,
+        settings,
+        patterns,
+        base=base,
+        repository=pr["repo"],
+        function_context=functions,
+        context_audit=context_audit,
     )
-    total_bytes = sum(len(text.encode()) for text in context.values())
+    total_bytes = sum(len(text.encode()) for text in context.values()) + sum(
+        len(item.model_dump_json(exclude_none=True).encode()) for item in functions
+    )
     attempts = 0
 
     # 기존 judge()가 AI 요청과 내부 재시도 전에 호출한다. PR 전체의 호출 한도를 계산한다.
@@ -219,7 +327,9 @@ async def review() -> None:
 
     # 공식 출력, 변환 전 리뷰, HEAD 좌표가 없어 제외한 지적을 각각 모은다.
     findings, original, omitted = [], [], 0
-    inputs = ReviewInput(related_files=context)
+    inputs = ReviewInput(
+        related_files=context, function_context=functions, context_audit=context_audit
+    )
     locations = {}
     statuses = {
         "A": "added",
@@ -319,6 +429,7 @@ async def review() -> None:
                     "findings": original,
                     "omitted_without_head_location": omitted,
                     "model": model,
+                    "context_audit": context_audit,
                 },
                 ensure_ascii=False,
                 indent=2,

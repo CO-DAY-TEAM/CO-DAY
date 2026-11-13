@@ -96,6 +96,10 @@ async def judge(
         "files": [file.model_dump() for file in inputs.files],
         "related_files": inputs.related_files,
     }
+    if inputs.function_context:
+        payload["function_context"] = [
+            item.model_dump(exclude_none=True) for item in inputs.function_context
+        ]
     await reserve_attempt()
     result = await Runner.run(
         agent,

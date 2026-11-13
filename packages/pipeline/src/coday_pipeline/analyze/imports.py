@@ -6,14 +6,10 @@ import re
 from pathlib import PurePosixPath
 
 from coday_pipeline.analyze.file_filter import exclusion
+from coday_pipeline.analyze.function_context import js_tree
+from coday_pipeline.analyze.import_aliases import alias_target, configured_alias
 
 SOURCE_SUFFIXES = {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}
-# Skip comments and strings as whole tokens, so examples in prose are not imports.
-JS_TOKENS = re.compile(
-    r"//[^\n]*|/\*[\s\S]*?\*/|`(?:\\[\s\S]|[^`\\])*`"
-    r'|"(?:\\[\s\S]|[^"\\])*"|\'(?:\\[\s\S]|[^\'\\])*\''
-    r"|[A-Za-z_$][\w$]*|[^\s]"
-)
 
 
 def eligible_context(path: str, mode: str, size: int, limit: int, patterns: list[str]) -> bool:
@@ -25,40 +21,54 @@ def eligible_context(path: str, mode: str, size: int, limit: int, patterns: list
     )
 
 
-def _js_imports(source: str):
-    tokens = [
-        m.group() for m in JS_TOKENS.finditer(source) if not m.group().startswith(("//", "/*", "`"))
-    ]
-    for i, token in enumerate(tokens):
-        if i and tokens[i - 1] in {".", "?."}:
-            continue
-        if token == "require" and tokens[i + 1 : i + 2] == ["("]:
-            tail = tokens[i + 2 : i + 4]
-            if len(tail) == 2 and tail[1] == ")" and tail[0].startswith(("'", '"')):
-                # CommonJS bindings are optional; the dependency is still explicit.
-                yield tail[0][1:-1], set()
-        if token != "import" or i + 1 >= len(tokens) or tokens[i + 1] in {"(", "."}:
-            continue  # Dynamic import and import.meta are intentionally unsupported.
-        if tokens[i + 1].startswith(("'", '"')):
-            yield tokens[i + 1][1:-1], set()
-            continue
-        names = set()
-        for j in range(i + 1, min(len(tokens), i + 256)):
-            value = tokens[j]
-            if value in {";", "import", "export"}:
-                break
-            if value == "from":
-                if j + 1 < len(tokens) and tokens[j + 1].startswith(("'", '"')):
-                    yield tokens[j + 1][1:-1], names
-                break
-            if re.fullmatch(r"[A-Za-z_$][\w$]*", value) and value not in {"type", "as"}:
-                names.add(value)
+def _js_imports(source: str, suffix: str = ".ts"):
+    raw = source.encode("utf-8")
+    root = js_tree("module" + suffix, source)
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        stack.extend(reversed(node.named_children))
+        module, names, dynamic = None, set(), False
+        if node.type == "import_statement" and not node.has_error:
+            module = node.child_by_field_name("source")
+            pending = [child for child in node.named_children if child.type == "import_clause"]
+            while pending:
+                child = pending.pop()
+                if child.type in {"identifier", "type_identifier"}:
+                    names.add(raw[child.start_byte : child.end_byte].decode("utf-8"))
+                pending.extend(child.named_children)
+        elif node.type == "call_expression" and not node.has_error:
+            fn = node.child_by_field_name("function")
+            args = node.child_by_field_name("arguments")
+            if (
+                fn is None
+                or args is None
+                or len(args.named_children) != 1
+                or not (
+                    fn.type == "import"
+                    or (fn.type == "identifier" and raw[fn.start_byte : fn.end_byte] == b"require")
+                )
+            ):
+                continue
+            module = args.named_children[0]
+            if fn.type == "import":
+                dynamic = True
+        if module is not None and module.type == "string":
+            text = raw[module.start_byte : module.end_byte].decode("utf-8")
+            if "\\" not in text:
+                yield text[1:-1], names, dynamic
 
 
-def _js_path(path: str, module: str, paths: set[str]) -> str | None:
-    if not module.startswith(("./", "../")) or "\\" in module:
+def _js_path(path: str, module: str, paths: set[str], configs: dict | None = None) -> str | None:
+    if "\\" in module:
         return None
-    target = posixpath.normpath(posixpath.join(posixpath.dirname(path), module))
+    target = (
+        posixpath.normpath(posixpath.join(posixpath.dirname(path), module))
+        if module.startswith(("./", "../"))
+        else alias_target(path, module, paths, configs or {})
+    )
+    if target is None:
+        return None
     if target.startswith("../") or target.startswith("/"):
         return None
     if target in paths:
@@ -134,7 +144,14 @@ def _python_imports(path: str, source: str, paths: set[str]):
                     yield target or base, {alias.asname or alias.name}
 
 
-def import_priorities(path: str, source: str, patch: str, paths: set[str]) -> dict[str, int]:
+def import_priorities(
+    path: str,
+    source: str,
+    patch: str,
+    paths: set[str],
+    configs: dict | None = None,
+    audit: list | None = None,
+) -> dict[str, int]:
     """0: binding mentioned on an added line; 1: other direct import."""
     suffix = PurePosixPath(path).suffix
     added = "\n".join(
@@ -143,19 +160,43 @@ def import_priorities(path: str, source: str, patch: str, paths: set[str]) -> di
         if line.startswith("+") and not line.startswith("+++")
     )
     identifiers = set(re.findall(r"[A-Za-z_$][\w$]*", added))
+    changed_modules = (
+        {module for module, _, _ in _js_imports(added, suffix)}
+        if suffix in SOURCE_SUFFIXES - {".py"}
+        else set()
+    )
     priorities = {}
     if suffix == ".py":
         imports = _python_imports(path, source, paths)
     elif suffix in SOURCE_SUFFIXES:
-        imports = (
-            (target, names)
-            for module, names in _js_imports(source)
-            if (target := _js_path(path, module, paths))
-        )
+        imports = []
+        for module, names, dynamic in _js_imports(source, suffix):
+            if dynamic and module not in changed_modules:
+                continue  # Bound dynamic traversal to literal imports in this change.
+            target = _js_path(path, module, paths, configs)
+            if target:
+                imports.append((target, names | ({module} if module in changed_modules else set())))
+                if audit is not None:
+                    audit.append(
+                        dict(
+                            path=path,
+                            module=module,
+                            target=target,
+                            status="resolved",
+                            reason="explicit_import",
+                        )
+                    )
+            elif audit is not None and (
+                module.startswith(("./", "../", "@/"))
+                or configured_alias(path, module, paths, configs or {})
+            ):
+                audit.append(
+                    dict(path=path, module=module, status="skipped", reason="unresolved_import")
+                )
     else:
         return priorities
     for target, names in imports:
-        rank = 0 if names & identifiers else 1
+        rank = 0 if names & (identifiers | changed_modules) else 1
         priorities[target] = min(rank, priorities.get(target, rank))
     return priorities
 
