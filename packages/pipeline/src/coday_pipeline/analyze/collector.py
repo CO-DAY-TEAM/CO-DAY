@@ -87,6 +87,7 @@ async def collect(
         p = PurePosixPath(path)
         if (
             item["type"] != "blob"
+            or item.get("mode") == "120000"
             or path in changed
             or exclusion(path, settings.exclude_patterns)
             or p.name.upper() in {"AGENTS.MD", "CLAUDE.MD", "GEMINI.MD"}
