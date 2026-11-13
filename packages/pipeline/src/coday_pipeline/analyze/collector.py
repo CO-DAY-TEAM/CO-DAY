@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
 from coday_contracts import FileStatus, ReviewJob, ReviewSettings
+from coday_contracts.review_input import FunctionContext
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
 
@@ -12,6 +13,8 @@ from coday_pipeline.analyze.configuration import (
     patch_source,
 )
 from coday_pipeline.analyze.file_filter import decode, exclusion
+from coday_pipeline.analyze.function_context import FunctionContextBuilder
+from coday_pipeline.analyze.import_aliases import config_candidates, parse_config
 from coday_pipeline.analyze.imports import (
     SOURCE_SUFFIXES,
     eligible_context,
@@ -34,6 +37,8 @@ class CollectedFiles:
     files: list[FilePatch] = field(default_factory=list)
     excluded_files: dict[str, str] = field(default_factory=dict)
     related_files: dict[str, str] = field(default_factory=dict)
+    function_context: list[FunctionContext] = field(default_factory=list)
+    context_audit: list[dict] = field(default_factory=list)
 
 
 async def collect(
@@ -97,6 +102,51 @@ async def collect(
     imports = {}
     configurations = {}
     source_bytes = 0
+    sources = {}
+    alias_configs = {}
+    candidates = config_candidates(
+        {f.path for f in output.files if PurePosixPath(f.path).suffix in SOURCE_SUFFIXES - {".py"}},
+        paths,
+    )
+    for number, path in enumerate(candidates):
+        item = metadata[path]
+        reason = None
+        if number >= github.settings.related_file_count:
+            reason = "alias_config_count_limit"
+        elif not eligible_context(
+            path,
+            item.get("mode", "100644"),
+            item.get("size", 0),
+            github.settings.max_related_file_bytes,
+            settings.exclude_patterns,
+        ):
+            reason = "alias_config_excluded_or_size"
+        elif source_bytes + item.get("size", 0) > github.settings.max_input_bytes:
+            reason = "alias_config_read_budget"
+        else:
+            await guard()
+            raw = await github.file(token, name, path, job.head_sha)
+            source_bytes += len(raw)
+            content = decode(raw)
+            if (
+                content is None
+                or len(raw) > github.settings.max_related_file_bytes
+                or source_bytes > github.settings.max_input_bytes
+            ):
+                reason = "alias_config_decode_or_budget"
+            else:
+                try:
+                    alias_configs[path] = parse_config(path, content)
+                except (ValueError, RecursionError):
+                    reason = "alias_config_invalid_or_unsupported"
+        output.context_audit.append(
+            dict(
+                path=path,
+                head_sha=job.head_sha,
+                status="skipped" if reason else "resolved",
+                reason=reason or "explicit_alias_config",
+            )
+        )
     for file in output.files:
         if file.status == "removed" and PurePosixPath(file.path).suffix in CONFIG_SUFFIXES:
             configurations[file.path] = patch_source(file.patch, "old")
@@ -107,16 +157,46 @@ async def collect(
             or item.get("size", 0) > github.settings.max_file_bytes
             or source_bytes + item.get("size", 0) > github.settings.max_input_bytes
         ):
+            reason = (
+                "source_missing"
+                if item is None
+                else "unsupported_language"
+                if PurePosixPath(file.path).suffix not in SOURCE_SUFFIXES | CONFIG_SUFFIXES
+                else "source_file_limit"
+                if item.get("size", 0) > github.settings.max_file_bytes
+                else "source_read_budget"
+            )
+            output.context_audit.append(
+                dict(
+                    path=file.path,
+                    head_sha=job.head_sha,
+                    status="skipped",
+                    reason=reason,
+                    complete=False,
+                )
+            )
             continue
         await guard()
         raw = await github.file(token, name, file.path, job.head_sha)
         source_bytes += len(raw)
         source = decode(raw)
         if source is None or source_bytes > github.settings.max_input_bytes:
+            output.context_audit.append(
+                dict(
+                    path=file.path,
+                    head_sha=job.head_sha,
+                    status="skipped",
+                    reason="source_decode_or_budget",
+                    complete=False,
+                )
+            )
             continue
+        sources[file.path] = (source, file.patch)
         if PurePosixPath(file.path).suffix in CONFIG_SUFFIXES:
             configurations[file.path] = source
-        for path, rank in import_priorities(file.path, source, file.patch, paths).items():
+        for path, rank in import_priorities(
+            file.path, source, file.patch, paths, alias_configs, output.context_audit
+        ).items():
             imports[path] = min(rank, imports.get(path, rank))
     for path, rank in configuration_priorities(
         changed, configurations, paths, f"https://github.com/{name}"
@@ -154,4 +234,19 @@ async def collect(
         if content is not None:
             total += len(content.encode())
             output.related_files[path] = content
+    # Preserve existing related-file selection; supplemental functions use only
+    # the remaining budget and never displace the diff or related files.
+    context = FunctionContextBuilder(
+        job.head_sha,
+        min(
+            github.settings.max_input_bytes - total,
+            github.settings.related_file_count * github.settings.max_related_file_bytes,
+        ),
+        github.settings.max_related_file_bytes,
+        github.settings.related_file_count,
+    )
+    for path, (source, patch) in sources.items():
+        context.add(path, source, patch)
+    output.function_context = context.contexts
+    output.context_audit.extend(context.audit)
     return output
