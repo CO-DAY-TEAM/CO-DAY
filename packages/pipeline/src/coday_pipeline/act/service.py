@@ -36,7 +36,7 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
         for path, reason in inputs.excluded_files.items():
             summary += f"- {plain(path)}: {plain(reason)}\n"
         summary += "\n</details>\n"
-    batches, comments, metadata, length = [], [], [], len(summary)
+    comments, metadata = [], []
     body = summary
     seen = set()
     for position, finding in enumerate(result.findings):
@@ -56,16 +56,6 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             text += f"\n\n**{label}**\n\n{plain(value)}"
         if finding.suggestion is not None and finding.importance == "important":
             text += f"\n\n```suggestion\n{finding.suggestion}\n```"
-        if len(comments) >= 40 or length + len(text) > 50000:
-            batches.append(
-                {
-                    "body": body,
-                    "comments": comments,
-                    "findings": metadata,
-                    "github_id": None,
-                }
-            )
-            body, comments, metadata, length = "## CO-DAY 리뷰 · 계속\n", [], [], 0
         metadata.append({"fingerprint": key, "category": finding.category})
         if finding.importance == "minor":
             body += f"\n### {plain(finding.path)}:{finding.line}\n{text}\n"
@@ -79,14 +69,18 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             if finding.start_line and finding.start_line < finding.line:
                 comment.update(start_line=finding.start_line, start_side=finding.side)
             comments.append(comment)
-        length += len(text)
-    batches.append({"body": body, "comments": comments, "findings": metadata, "github_id": None})
-    if any(len(batch["body"]) > 60000 for batch in batches):
+    if len(body) > 60000:
         raise ServiceError("publication_limit", "리뷰 요약이 GitHub 게시 크기 한도를 넘었습니다.")
-    for index, batch in enumerate(batches):
-        batch["marker"] = f"<!-- coday:review:{review.id}:{index} -->"
-        batch["body"] += "\n\n" + batch["marker"]
-    return batches
+    marker = f"<!-- coday:review:{review.id}:0 -->"
+    return [
+        {
+            "body": f"{body}\n\n{marker}",
+            "comments": comments,
+            "findings": metadata,
+            "github_id": None,
+            "marker": marker,
+        }
+    ]
 
 
 async def progress(
