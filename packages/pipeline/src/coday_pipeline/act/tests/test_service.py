@@ -84,11 +84,15 @@ def test_overlapping_suggestions_keep_priority_and_preserve_findings():
         before = result.model_dump()
         resolved = resolve_suggestion_conflicts(result)
         assert {f.title for f in resolved.findings if f.suggestion is not None} == {
-            "short", "adjacent", "other"
+            "short",
+            "adjacent",
+            "other",
         }
         assert result.model_dump() == before
         for original, updated in zip(result.findings, resolved.findings, strict=True):
-            assert original.model_dump(exclude={"suggestion"}) == updated.model_dump(exclude={"suggestion"})
+            assert original.model_dump(exclude={"suggestion"}) == updated.model_dump(
+                exclude={"suggestion"}
+            )
     batch = build_publication(Review(id="conflicts", head_sha="head"), result, ReviewInput())[0]
     assert len(batch["comments"]) == 5
     assert sum("```suggestion" in c["body"] for c in batch["comments"]) == 3
@@ -96,7 +100,9 @@ def test_overlapping_suggestions_keep_priority_and_preserve_findings():
 
 @pytest.mark.parametrize("severity", ["P0", "P1", "P2", "P3"])
 def test_performance_severity_controls_publication(severity):
-    result = ReviewResult.model_validate({"findings": [finding_data(category="performance", severity=severity)]})
+    result = ReviewResult.model_validate(
+        {"findings": [finding_data(category="performance", severity=severity)]}
+    )
     batch = build_publication(Review(id="severity", head_sha="head"), result, ReviewInput())[0]
     body = batch["body"] if severity == "P3" else batch["comments"][0]["body"]
     assert "[성능]" in body
