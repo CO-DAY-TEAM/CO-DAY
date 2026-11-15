@@ -36,7 +36,6 @@ async def collect(
     if len(files) != pr["changed_files"]:
         raise ServiceError("incomplete_diff", "GitHub에서 전체 변경 파일을 가져오지 못했습니다.")
     output = CollectedFiles()
-    total = 0
     for file in files:
         await guard()
         path = file["filename"]
@@ -55,12 +54,6 @@ async def collect(
         patch_size = len(patch.encode("utf-8"))
         if patch_size > github.settings.max_file_bytes:
             raise ServiceError("file_limit", "파일의 patch 크기가 처리 한도를 넘었습니다.")
-        total += patch_size
-        if total > github.settings.max_input_bytes:
-            raise ServiceError(
-                "input_limit",
-                "전체 입력 처리 한도를 넘었습니다. 운영 설정 또는 제외 경로를 확인해 주세요.",
-            )
         output.files.append(
             FilePatch(path, file["status"], patch, file["additions"], file["deletions"])
         )
@@ -102,8 +95,5 @@ async def collect(
         await guard()
         content = decode(await github.file(token, name, path, job.head_sha))
         if content is not None:
-            total += len(content.encode())
-            if total > github.settings.max_input_bytes:
-                raise ServiceError("input_limit", "관련 코드를 포함한 입력 처리 한도를 넘었습니다.")
             output.related_files[path] = content
     return output
