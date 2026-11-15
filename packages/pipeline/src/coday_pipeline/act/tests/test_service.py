@@ -27,7 +27,7 @@ def finding_data(**updates):
 )
 def test_server_renders_sections_and_only_one_suggestion(suggestion):
     result = ReviewResult.model_validate({"findings": [finding_data(suggestion=suggestion)]})
-    batches = build_publication(
+    publication = build_publication(
         Review(id="test", head_sha="head"),
         result,
         ReviewInput(
@@ -45,7 +45,7 @@ def test_server_renders_sections_and_only_one_suggestion(suggestion):
             ]
         ),
     )
-    body = batches[0]["comments"][0]["body"]
+    body = publication["comments"][0]["body"]
     assert all(label in body for label in ("발생 조건", "코드 근거", "수정 방향"))
     assert "`href`" in body
     assert "suggestion: null" not in body
