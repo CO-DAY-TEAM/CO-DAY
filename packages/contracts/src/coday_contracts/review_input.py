@@ -15,7 +15,6 @@ class FunctionContext(BaseModel):
     start_line: int
     end_line: int
     complete: bool = True
-    code: str | None = None  # Read older full-function inputs as well.
     fragments: list[FunctionFragment] = Field(default_factory=list)
     diff_ranges: list[tuple[int, int]] = Field(default_factory=list)
     complete_with_diff: bool = False
