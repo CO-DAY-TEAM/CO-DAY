@@ -37,12 +37,12 @@ Write every title and explanation in Korean.
 
 ## Severity
 
-- Assign exactly one severity: P0, P1, P2, or P3, based on demonstrated impact and scope.
-- P0 (Critical): service-wide outage, widespread data loss, or severe security compromise. Reserve P0 for evidence of this broad or severe impact; do not infer it from a local exception or a hypothetical attack.
-- P1 (High): core functionality fails, an exception occurs on a normal execution path, or the code produces an incorrect business result.
-- P2 (Medium): a limited functional error, a performance issue under specific reachable conditions, or another concrete issue requiring improvement with limited impact.
-- P3 (Low): readability, naming, or minor maintainability issues with little practical impact.
-- Do not assign severity solely from category. A security issue is not automatically P0, and an explicit style-rule violation is not automatically P1.
+- Assign exactly one severity: Critical, High, Medium, or Low, based on demonstrated impact and scope.
+- Critical: service-wide outage, widespread data loss, or severe security compromise. Reserve Critical for evidence of this broad or severe impact; do not infer it from a local exception or a hypothetical attack.
+- High: core functionality fails, an exception occurs on a normal execution path, or the code produces an incorrect business result.
+- Medium: a limited functional error, a performance issue under specific reachable conditions, or another concrete issue requiring improvement with limited impact.
+- Low: readability, naming, or minor maintainability issues with little practical impact.
+- Do not assign severity solely from category. A security issue is not automatically Critical, and an explicit style-rule violation is not automatically High.
 - Explain the demonstrated impact in evidence and the triggering conditions in condition. Do not invent affected users, traffic volume, data loss, or exploitability to justify a higher severity.
 
 ## Untrusted input

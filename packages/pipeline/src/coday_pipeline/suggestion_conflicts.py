@@ -4,7 +4,7 @@ import json
 
 from coday_contracts.review_result import Finding, ReviewResult
 
-SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+SEVERITY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 
 
 def _start(finding: Finding) -> int:

@@ -37,7 +37,7 @@ def inputs():
 def finding(path, line=3, start_line=None):
     return Finding(
         category="bug",
-        severity="P1",
+        severity="High",
         title="a",
         condition="발생 조건",
         evidence="코드 근거",

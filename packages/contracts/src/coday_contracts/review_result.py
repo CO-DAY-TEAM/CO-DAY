@@ -8,7 +8,7 @@ class Finding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category: Literal["bug", "security", "performance", "maintainability", "style"]
-    severity: Literal["P0", "P1", "P2", "P3"]
+    severity: Literal["Critical", "High", "Medium", "Low"]
     title: str = Field(min_length=1, max_length=180)
     path: str
     line: int = Field(ge=1)
@@ -30,7 +30,7 @@ class Finding(BaseModel):
         if isinstance(data, dict) and data.get("importance") in ("important", "minor"):
             data = dict(data)
             importance = data.pop("importance")
-            data.setdefault("severity", "P1" if importance == "important" else "P3")
+            data.setdefault("severity", "High" if importance == "important" else "Low")
         return data
 
 

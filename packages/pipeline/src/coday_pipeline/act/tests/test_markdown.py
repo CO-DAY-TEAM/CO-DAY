@@ -39,7 +39,7 @@ def test_escape_tildes_preserves_code_and_existing_escapes(source, expected):
     assert escape_prose_tildes(expected) == expected
 
 
-@pytest.mark.parametrize("severity", ["P0", "P1", "P2", "P3"])
+@pytest.mark.parametrize("severity", ["Critical", "High", "Medium", "Low"])
 @pytest.mark.parametrize("field", ["title", "condition", "evidence", "recommendation"])
 def test_publication_preserves_suggestion_and_escapes_prose(severity, field):
     explanation = DISPOSE_EVIDENCE + "\n~~설명~~ `~mask`와 ``a`~b``"
@@ -64,7 +64,7 @@ def test_publication_preserves_suggestion_and_escapes_prose(severity, field):
         result,
         ReviewInput(),
     )[0]
-    if severity == "P3":
+    if severity == "Low":
         assert batch["comments"] == []
         body = batch["body"]
         assert "```suggestion" not in body
@@ -80,7 +80,7 @@ def test_publication_preserves_suggestion_and_escapes_prose(severity, field):
     assert result.findings[0].model_dump() == data
 
 
-@pytest.mark.parametrize("severity", ["P0", "P1", "P2", "P3"])
+@pytest.mark.parametrize("severity", ["Critical", "High", "Medium", "Low"])
 async def test_act_sends_escaped_body_to_github_without_network(monkeypatch, severity):
     result = ReviewResult.model_validate(
         {
@@ -127,10 +127,10 @@ async def test_act_sends_escaped_body_to_github_without_network(monkeypatch, sev
     args, kwargs = github.request.call_args
     assert args[1:] == ("POST", "/repos/owner/test/pulls/1/reviews")
     payload = kwargs["data"]
-    body = payload["body"] if severity == "P3" else payload["comments"][0]["body"]
+    body = payload["body"] if severity == "Low" else payload["comments"][0]["body"]
     assert escape_prose_tildes(DISPOSE_EVIDENCE) in body
     assert r"`~mask`를 유지하고 \~\~설명\~\~" in body
-    if severity == "P3":
+    if severity == "Low":
         assert payload["comments"] == []
     else:
         assert "```suggestion\n    const mask = ~~value;\n```" in body

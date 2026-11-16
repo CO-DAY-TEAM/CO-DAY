@@ -21,9 +21,6 @@ CATEGORIES = {
 }
 
 
-SEVERITIES = {"P0": "Critical", "P1": "High", "P2": "Medium", "P3": "Low"}
-
-
 def plain(text: str) -> str:
     # 설명에 있는 HTML을 escape하고 @mention이 알림을 보내지 않도록 처리한다.
     return text.replace("<", "&lt;").replace(">", "&gt;").replace("@", "@\u200b")
@@ -61,7 +58,7 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
         key = hashlib.sha256(f"{review.id}:{position}".encode()).hexdigest()
         text = (
             f"**[{CATEGORIES[finding.category]}] "
-            f"[{SEVERITIES[finding.severity]} ({finding.severity})] {review_text(finding.title)}**"
+            f"[{finding.severity}] {review_text(finding.title)}**"
         )
         for label, value in (
             ("발생 조건", finding.condition),
@@ -69,7 +66,7 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             ("수정 방향", finding.recommendation),
         ):
             text += f"\n\n**{label}**\n\n{review_text(value)}"
-        if finding.suggestion is not None and finding.severity != "P3":
+        if finding.suggestion is not None and finding.severity != "Low":
             text += f"\n\n```suggestion\n{finding.suggestion}\n```"
         if len(comments) >= 40 or length + len(text) > 50000:
             batches.append(
@@ -82,7 +79,7 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             )
             body, comments, metadata, length = "## CO-DAY 리뷰 · 계속\n", [], [], 0
         metadata.append({"fingerprint": key, "category": finding.category})
-        if finding.severity == "P3":
+        if finding.severity == "Low":
             body += f"\n### {plain(finding.path)}:{finding.line}\n{text}\n"
         else:
             comment = {
