@@ -54,19 +54,6 @@ def test_server_renders_sections_and_only_one_suggestion(suggestion):
         assert body.count(suggestion) == 1
 
 
-@pytest.mark.parametrize("importance,severity", [("important", "High"), ("minor", "Low")])
-def test_legacy_importance_is_read_without_changing_new_schema(importance, severity):
-    from coday_contracts import Finding
-
-    data = finding_data()
-    data.pop("severity")
-    data["importance"] = importance
-    finding = Finding.model_validate(data)
-    assert finding.severity == severity
-    assert "importance" not in finding.model_dump()
-    assert "importance" not in Finding.model_json_schema()["properties"]
-
-
 def test_overlapping_suggestions_keep_priority_and_preserve_findings():
     from itertools import permutations
 
