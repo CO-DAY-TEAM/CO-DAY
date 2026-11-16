@@ -26,4 +26,3 @@ class ReviewInput(BaseModel):
     excluded_files: dict[str, str] = Field(default_factory=dict)
     related_files: dict[str, str] = Field(default_factory=dict)
     function_context: list[FunctionContext] = Field(default_factory=list)
-    context_audit: list[dict] = Field(default_factory=list, exclude=True)

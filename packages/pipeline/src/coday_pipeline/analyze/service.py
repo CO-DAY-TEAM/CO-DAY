@@ -21,7 +21,6 @@ async def analyze(
         excluded_files=collected.excluded_files,
         related_files=collected.related_files,
         function_context=collected.function_context,
-        context_audit=collected.context_audit,
     )
     for file in collected.files:
         hunks = parse_patch(file.patch)

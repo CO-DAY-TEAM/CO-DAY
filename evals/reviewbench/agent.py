@@ -327,9 +327,7 @@ async def review() -> None:
 
     # 공식 출력, 변환 전 리뷰, HEAD 좌표가 없어 제외한 지적을 각각 모은다.
     findings, original, omitted = [], [], 0
-    inputs = ReviewInput(
-        related_files=context, function_context=functions, context_audit=context_audit
-    )
+    inputs = ReviewInput(related_files=context, function_context=functions)
     locations = {}
     statuses = {
         "A": "added",
