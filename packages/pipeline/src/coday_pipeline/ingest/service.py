@@ -92,5 +92,5 @@ async def ingest(github: GitHub, delivery_id: str, event: str, payload: dict):
                     requester=comment["user"]["login"],
                 )
             except ServiceError as error:
-                if error.code not in {"forbidden", "paused", "pr_closed"}:
+                if error.code not in {"forbidden", "paused", "pr_closed", "daily_limit"}:
                     raise

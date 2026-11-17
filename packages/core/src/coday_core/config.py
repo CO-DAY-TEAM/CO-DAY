@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     job_timeout_seconds: int = Field(default=1800, ge=60)
     # 리뷰당 AI 호출 한도(내부 재시도 포함)
     max_ai_calls: int = Field(default=100, ge=1)
+    # 설치 계정별 하루 리뷰 실행 한도(새 리뷰와 재시도 포함, 한국 시간 0시 초기화)
+    max_daily_reviews: int = Field(default=3, ge=1)
     # 개별 파일 크기 제한(바이트)
     max_file_bytes: int = Field(default=2_000_000, ge=1000)
     # 전체 입력 크기 제한(바이트)

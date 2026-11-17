@@ -7,6 +7,7 @@ from datetime import timedelta
 import pytest
 from coday_api.main import app
 from coday_contracts import AnalyzedFile, Finding, ReviewInput, ReviewResult, ReviewSettings
+from coday_core import queue
 from coday_core.access import (
     repository_access,
     upsert_installation,
@@ -15,6 +16,7 @@ from coday_core.access import (
 from coday_core.config import Settings
 from coday_core.db import transaction
 from coday_core.db.models import (
+    DailyUsage,
     Delivery,
     Installation,
     PostedFinding,
@@ -23,7 +25,7 @@ from coday_core.db.models import (
     now,
 )
 from coday_core.errors import GitHubError, ServiceError
-from coday_core.queue import enqueue, retry_review
+from coday_core.queue import enqueue, retry_review, today_kst
 from coday_pipeline.analyze.diff_parser import parse_patch
 from coday_pipeline.ingest.service import ingest
 from coday_worker import runner
@@ -502,3 +504,80 @@ async def test_new_head_during_manual_review_finishes_progress_comment(github, m
     assert "새 리뷰" in github.comments[0]["body"]
     with transaction() as db:
         assert db.get(Review, review_id).status == "superseded"
+
+
+def daily_count():
+    with transaction() as db:
+        usage = db.get(DailyUsage, (1, today_kst()))
+        return usage.count if usage else 0
+
+
+async def finished_review(github, key):
+    review_id = await enqueue(github, 20, 1, key, "manual", "owner")
+    with transaction() as db:
+        db.get(Review, review_id).status = "completed"
+    return review_id
+
+
+# 설치 계정별 하루 한도까지만 새 리뷰를 만들고, 넘으면 수동 요청은 거부하고 자동 리뷰는 건너뛰는지 확인한다.
+async def test_daily_limit_blocks_new_reviews_after_limit(github):
+    for key in ["d1", "d2", "d3"]:
+        assert await finished_review(github, key)
+    assert daily_count() == 3
+    with pytest.raises(ServiceError, match="한도") as error:
+        await enqueue(github, 20, 1, "d4", "manual", "owner")
+    assert error.value.code == "daily_limit"
+    with transaction() as db:
+        assert db.scalar(select(func.count(Review.id))) == 3
+    assert daily_count() == 3
+
+
+# 한도를 다 쓴 설치 계정은 자동 리뷰를 에러 없이 건너뛰는지 확인한다.
+async def test_daily_limit_skips_automatic_review(github):
+    with transaction() as db:
+        db.add(DailyUsage(installation_id=1, day=today_kst(), count=3))
+    assert await enqueue(github, 20, 1, "auto", "automatic") is None
+    with transaction() as db:
+        assert db.scalar(select(func.count(Review.id))) == 0
+
+
+# 같은 PR의 중복 요청처럼 새 리뷰를 만들지 않는 요청은 한도를 차감하지 않는지 확인한다.
+async def test_daily_limit_ignores_requests_that_reuse_active_review(github):
+    first = await enqueue(github, 20, 1, "a", "manual", "owner")
+    assert await enqueue(github, 20, 1, "b", "manual", "owner") == first
+    assert await enqueue(github, 20, 1, "a", "manual", "owner") == first
+    assert daily_count() == 1
+
+
+# 재시도도 하루 한도를 차감하고, 한도를 넘으면 리뷰 상태를 바꾸지 않고 거부하는지 확인한다.
+async def test_daily_limit_counts_retries(github):
+    github.settings.max_daily_reviews = 2
+    review_id = await enqueue(github, 20, 1, "r", "manual", "owner")
+    with transaction() as db:
+        db.get(Review, review_id).status = "failed"
+    await retry_review(github, review_id, "owner")
+    assert daily_count() == 2
+    with transaction() as db:
+        db.get(Review, review_id).status = "failed"
+    with pytest.raises(ServiceError) as error:
+        await retry_review(github, review_id, "owner")
+    assert error.value.code == "daily_limit"
+    with transaction() as db:
+        review = db.get(Review, review_id)
+        assert review.status == "failed"
+        assert review.attempt == 2
+    assert daily_count() == 2
+
+
+# 한국 날짜가 바뀌면 한도가 다시 채워지는지 확인한다.
+async def test_daily_limit_resets_next_day(github, monkeypatch):
+    github.settings.max_daily_reviews = 1
+    today = today_kst()
+    await finished_review(github, "day1")
+    with pytest.raises(ServiceError, match="한도"):
+        await enqueue(github, 20, 1, "day1-again", "manual", "owner")
+    monkeypatch.setattr(queue, "today_kst", lambda: today + timedelta(days=1))
+    assert await enqueue(github, 20, 1, "day2", "manual", "owner")
+    with transaction() as db:
+        assert db.get(DailyUsage, (1, today)).count == 1
+        assert db.get(DailyUsage, (1, today + timedelta(days=1))).count == 1
