@@ -113,6 +113,7 @@ async def test_collector_reads_head_imports_and_keeps_limits(related_count):
         {"path": "src/page.ts", "type": "blob", "mode": "100644", "size": len(source)},
         {"path": "auth/tokens.ts", "type": "blob", "mode": "100644", "size": 20},
         {"path": "src/page.test.ts", "type": "blob", "mode": "100644", "size": 20},
+        {"path": "src/link.ts", "type": "blob", "mode": "120000", "size": 10},
     ]
 
     async def request(*args, **kwargs):
@@ -120,6 +121,7 @@ async def test_collector_reads_head_imports_and_keeps_limits(related_count):
 
     async def file(token, repo, path, sha):
         assert sha == "head"
+        assert path != "src/link.ts", "심볼릭 링크는 읽지 않아야 한다."
         return source.encode() if path == "src/page.ts" else b"export const validate = () => true;"
 
     github = SimpleNamespace(

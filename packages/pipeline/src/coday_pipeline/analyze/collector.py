@@ -221,6 +221,9 @@ async def collect(
             or reads >= 2 * github.settings.related_file_count
         ):
             break
+        # 파일 목록에서 제외했더라도 실제 읽기 전에 심볼릭 링크를 다시 확인한다.
+        if metadata[path].get("mode") == "120000":
+            continue
         if metadata[path].get("size", 0) > github.settings.max_input_bytes - total:
             continue
         await guard()
