@@ -1,12 +1,58 @@
 # 작업 큐 연동
+from datetime import date, datetime, timedelta, timezone
+
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from coday_core.access import effective_settings, repository_access
 from coday_core.db import transaction
-from coday_core.db.models import Installation, PullRequest, Repository, Review, now
+from coday_core.db.models import (
+    DailyUsage,
+    Installation,
+    PullRequest,
+    Repository,
+    Review,
+    now,
+)
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
+
+# 한국은 서머타임이 없어 고정 오프셋으로 충분하다.
+KST = timezone(timedelta(hours=9))
+
+
+def today_kst() -> date:
+    return datetime.now(KST).date()
+
+
+def daily_quota_available(db, installation_id: int, limit: int) -> bool:
+    """오늘 한도가 남아 있으면 1회를 차감하고 True를 반환한다.
+
+    호출 전에 Installation 행을 FOR UPDATE로 잠가 같은 설치 계정의 요청을 순서대로 처리한다.
+    """
+    day = today_kst()
+    db.execute(
+        insert(DailyUsage)
+        .values(installation_id=installation_id, day=day, count=0)
+        .on_conflict_do_nothing()
+    )
+    usage = db.scalar(
+        select(DailyUsage)
+        .where(DailyUsage.installation_id == installation_id, DailyUsage.day == day)
+        .with_for_update()
+    )
+    if usage.count >= limit:
+        return False
+    usage.count += 1
+    return True
+
+
+def daily_limit_error(limit: int) -> ServiceError:
+    return ServiceError(
+        "daily_limit",
+        f"오늘 리뷰 실행 한도({limit}회)를 모두 사용했습니다. 내일(한국 시간 0시 이후) 다시 요청해 주세요.",
+        429,
+    )
 
 
 async def enqueue(
@@ -95,6 +141,12 @@ async def enqueue(
         )
         if active:
             return active.id
+        # 실제로 새 리뷰를 만들 때만 하루 한도를 차감한다.
+        limit = github.settings.max_daily_reviews
+        if not daily_quota_available(db, install.id, limit):
+            if trigger == "automatic":
+                return None
+            raise daily_limit_error(limit)
         review = Review(
             request_key=request_key,
             repository_id=repo.id,
@@ -150,6 +202,9 @@ async def retry_review(github: GitHub, review_id: str, login: str):
                 "input_missing",
                 "저장된 입력이 없어 재개할 수 없습니다. PR에서 새 리뷰를 요청해 주세요.",
             )
+        limit = github.settings.max_daily_reviews
+        if not daily_quota_available(db, install.id, limit):
+            raise daily_limit_error(limit)
         review.status, review.error_code, review.error_message = "queued", None, None
         review.attempt += 1
         review.recoveries = 0

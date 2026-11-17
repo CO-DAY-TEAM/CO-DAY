@@ -1,11 +1,12 @@
 # 데이터베이스 모델 모음
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -49,6 +50,14 @@ class Repository(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     use_common: Mapped[bool] = mapped_column(Boolean, default=True)
     settings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class DailyUsage(Base):
+    # 설치 계정별 하루 리뷰 실행 횟수(새 리뷰와 재시도 포함)
+    __tablename__ = "daily_usage"
+    installation_id: Mapped[int] = mapped_column(ForeignKey("installations.id"), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class PullRequest(Base):

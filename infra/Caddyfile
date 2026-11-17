@@ -3,3 +3,7 @@
     reverse_proxy api:8000
     header Strict-Transport-Security "max-age=31536000"
 }
+
+www.{$SITE_ADDRESS} {
+    redir https://{$SITE_ADDRESS}{uri} permanent
+}
