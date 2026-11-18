@@ -12,6 +12,7 @@ export const statusFilters = ['all', 'running', 'completed', 'queued', 'failed']
 export const categories: Record<string, string> = {
   bug: '버그',
   security: '보안',
+  performance: '성능',
   style: '스타일',
   maintainability: '유지보수성',
 }

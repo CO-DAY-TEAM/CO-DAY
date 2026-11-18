@@ -2,6 +2,7 @@
 import json
 from collections.abc import Awaitable, Callable
 
+import tiktoken
 from agents import (
     Agent,
     ModelRetrySettings,
@@ -96,10 +97,21 @@ async def judge(
         "files": [file.model_dump() for file in inputs.files],
         "related_files": inputs.related_files,
     }
+    if inputs.function_context:
+        payload["function_context"] = [
+            item.model_dump(exclude_none=True) for item in inputs.function_context
+        ]
+    review_input = json.dumps(payload, ensure_ascii=False)
+    encoding = tiktoken.get_encoding("o200k_base")
+    if len(encoding.encode_ordinary(review_input)) > settings.max_input_tokens:
+        raise ServiceError(
+            "input_limit",
+            "전체 입력 처리 한도를 넘었습니다. 운영 설정 또는 제외 경로를 확인해 주세요.",
+        )
     await reserve_attempt()
     result = await Runner.run(
         agent,
-        input=json.dumps(payload, ensure_ascii=False),
+        input=review_input,
         max_turns=1,
         run_config=RunConfig(workflow_name="review-pr"),
     )
