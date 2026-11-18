@@ -104,6 +104,11 @@ async def judge(
             "input_limit",
             "전체 입력 처리 한도를 넘었습니다. 운영 설정 또는 제외 경로를 확인해 주세요.",
         )
+    if inputs.function_context:
+        payload["function_context"] = [
+            item.model_dump(exclude_none=True) for item in inputs.function_context
+        ]
+        review_input = json.dumps(payload, ensure_ascii=False)
     await reserve_attempt()
     result = await Runner.run(
         agent,
