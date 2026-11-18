@@ -18,13 +18,15 @@ from coday_api.dependencies import cipher, current_session, digest, mutation_ses
 router = APIRouter(prefix="/api/auth")
 
 
+def login_error(code: str) -> RedirectResponse:
+    return RedirectResponse(f"/?{urlencode({'login_error': code})}", status_code=303)
+
+
 @router.get("/login")
 async def login(request: Request, return_to: str = "/"):
     settings = request.app.state.settings
     if not settings.github_client_id:
-        raise ServiceError(
-            "not_configured", "운영자가 GitHub App 연결을 먼저 설정해야 합니다.", 503
-        )
+        return login_error("not_configured")
     if (
         not return_to.startswith("/")
         or return_to.startswith("//")
@@ -69,6 +71,13 @@ async def login(request: Request, return_to: str = "/"):
 
 @router.get("/callback")
 async def callback(request: Request, code: str = "", state: str = ""):
+    try:
+        return await complete_login(request, code, state)
+    except ServiceError as error:
+        return login_error(error.code)
+
+
+async def complete_login(request: Request, code: str, state: str) -> RedirectResponse:
     if not state or not hmac.compare_digest(state, request.cookies.get("coday_oauth", "")):
         raise ServiceError(
             "oauth_state", "로그인 확인이 만료되었습니다. 다시 로그인해 주세요.", 400
