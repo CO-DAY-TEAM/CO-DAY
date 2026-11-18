@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 import secrets
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -16,15 +17,22 @@ from sqlalchemy import delete, select
 from coday_api.dependencies import cipher, current_session, digest, mutation_session, user_token
 
 router = APIRouter(prefix="/api/auth")
+logger = logging.getLogger(__name__)
+
+
+# 브라우저가 직접 이동하는 로그인 경로는 JSON 대신 화면으로 돌려보내고 오류 코드만 전달한다
+def login_error(request: Request, code: str) -> RedirectResponse:
+    url = request.app.state.settings.public_url.rstrip("/")
+    response = RedirectResponse(f"{url}/?{urlencode({'login_error': code})}", status_code=303)
+    response.delete_cookie("coday_oauth", path="/api/auth")
+    return response
 
 
 @router.get("/login")
 async def login(request: Request, return_to: str = "/"):
     settings = request.app.state.settings
     if not settings.github_client_id:
-        raise ServiceError(
-            "not_configured", "운영자가 GitHub App 연결을 먼저 설정해야 합니다.", 503
-        )
+        return login_error(request, "not_configured")
     if (
         not return_to.startswith("/")
         or return_to.startswith("//")
@@ -68,7 +76,20 @@ async def login(request: Request, return_to: str = "/"):
 
 
 @router.get("/callback")
-async def callback(request: Request, code: str = "", state: str = ""):
+async def callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    # GitHub 승인 화면에서 취소하면 code 없이 error=access_denied로 돌아온다
+    if error:
+        return login_error(
+            request, "login_cancelled" if error == "access_denied" else "login_failed"
+        )
+    try:
+        return await complete_login(request, code, state)
+    except ServiceError as failure:
+        logger.warning("GitHub 로그인 실패: %s", failure.code)
+        return login_error(request, failure.code)
+
+
+async def complete_login(request: Request, code: str, state: str) -> RedirectResponse:
     if not state or not hmac.compare_digest(state, request.cookies.get("coday_oauth", "")):
         raise ServiceError(
             "oauth_state", "로그인 확인이 만료되었습니다. 다시 로그인해 주세요.", 400

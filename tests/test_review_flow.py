@@ -3,6 +3,7 @@ import hmac
 import json
 from contextlib import contextmanager
 from datetime import timedelta
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from coday_api.main import app
@@ -486,7 +487,30 @@ def test_unauthenticated_requests_and_invalid_oauth_state_are_rejected(github):
     with TestClient(app) as client:
         assert client.get("/api/reviews?repository_id=20").status_code == 401
         assert client.post("/api/reviews/unknown/retry").status_code == 401
-        assert client.get("/api/auth/callback?code=x&state=y").status_code == 400
+        response = client.get("/api/auth/callback?code=x&state=y", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].endswith("/?login_error=oauth_state")
+
+
+# 로그인 콜백이 실패하면 JSON 대신 화면으로 돌려보내 오류 코드를 전달하는지 확인한다.
+def test_login_callback_failures_redirect_to_ui(github, monkeypatch):
+    async def rejected_oauth(**data):
+        raise ServiceError("login_failed", "GitHub 로그인이 만료되었거나 승인되지 않았습니다.", 401)
+
+    with TestClient(app) as client:
+        app.state.settings = Settings(_env_file=None, github_client_id="client")
+        monkeypatch.setattr(app.state.github, "oauth", rejected_oauth)
+        login = client.get("/api/auth/login", follow_redirects=False)
+        state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+
+        response = client.get(f"/api/auth/callback?code=x&state={state}", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].endswith("/?login_error=login_failed")
+        assert "coday_session" not in response.cookies
+
+        cancelled = client.get("/api/auth/callback?error=access_denied", follow_redirects=False)
+        assert cancelled.status_code == 303
+        assert cancelled.headers["location"].endswith("/?login_error=login_cancelled")
 
 
 # 수동 리뷰 중 head가 바뀌면 결과 게시를 막고 진행 댓글에 중단과 새 리뷰 요청 방법을 안내하는지 확인한다.
