@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "coday-contracts",
     "coday-core",
+    "tiktoken==0.14.0",
     "openai-agents>=0.23.1,<1",
     "langfuse==5.0.2",
     "openinference-instrumentation-openai-agents==2.5.3",
