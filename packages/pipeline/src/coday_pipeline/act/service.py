@@ -45,7 +45,7 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
         for path, reason in inputs.excluded_files.items():
             summary += f"- {plain(path)}: {plain(reason)}\n"
         summary += "\n</details>\n"
-    batches, comments, metadata, length = [], [], [], len(summary)
+    comments, metadata = [], []
     body = summary
     seen = set()
     for position, finding in enumerate(publication_result.findings):
@@ -68,16 +68,6 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             text += f"\n\n**{label}**\n\n{review_text(value)}"
         if finding.suggestion is not None and finding.severity != "Low":
             text += f"\n\n```suggestion\n{finding.suggestion}\n```"
-        if len(comments) >= 40 or length + len(text) > 50000:
-            batches.append(
-                {
-                    "body": body,
-                    "comments": comments,
-                    "findings": metadata,
-                    "github_id": None,
-                }
-            )
-            body, comments, metadata, length = "## CO-DAY 리뷰 · 계속\n", [], [], 0
         metadata.append({"fingerprint": key, "category": finding.category})
         if finding.severity == "Low":
             body += f"\n### {plain(finding.path)}:{finding.line}\n{text}\n"
@@ -91,14 +81,16 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             if finding.start_line and finding.start_line < finding.line:
                 comment.update(start_line=finding.start_line, start_side=finding.side)
             comments.append(comment)
-        length += len(text)
-    batches.append({"body": body, "comments": comments, "findings": metadata, "github_id": None})
-    if any(len(batch["body"]) > 60000 for batch in batches):
+    if len(body) > 60000:
         raise ServiceError("publication_limit", "리뷰 요약이 GitHub 게시 크기 한도를 넘었습니다.")
-    for index, batch in enumerate(batches):
-        batch["marker"] = f"<!-- coday:review:{review.id}:{index} -->"
-        batch["body"] += "\n\n" + batch["marker"]
-    return batches
+    marker = f"<!-- coday:review:{review.id} -->"
+    return {
+        "body": f"{body}\n\n{marker}",
+        "marker": marker,
+        "comments": comments,
+        "findings": metadata,
+        "github_id": None,
+    }
 
 
 async def progress(
@@ -170,22 +162,23 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
     # 이전 실행의 게시 응답이 유실된 뒤 superseded가 되어도 통계용 게시 기록을 복구한다.
     # 복구한 기록은 현재 리뷰의 지적을 제외하는 데 사용하지 않는다.
     for old in previous_runs:
-        for index, batch in enumerate(old.publication or []):
-            if batch["github_id"]:
-                continue
-            posted = next(
-                (
-                    item
-                    for item in remote_reviews
-                    if item.get("user", {}).get("login") == github.settings.bot_login
-                    and batch["marker"] in item.get("body", "")
-                    and item.get("state") == "COMMENTED"
-                    and item.get("commit_id") == old.head_sha
-                ),
-                None,
-            )
-            if posted:
-                record_publication(old.id, index, posted["id"])
+        if not old.publication:
+            continue
+        if old.publication["github_id"]:
+            continue
+        posted = next(
+            (
+                item
+                for item in remote_reviews
+                if item.get("user", {}).get("login") == github.settings.bot_login
+                and old.publication["marker"] in item.get("body", "")
+                and item.get("state") == "COMMENTED"
+                and item.get("commit_id") == old.head_sha
+            ),
+            None,
+        )
+        if posted:
+            record_publication(old.id, posted["id"])
     with transaction() as db:
         review = db.get(Review, review_id)
         if review.publication is None:
@@ -195,45 +188,42 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
                 ReviewInput.model_validate(review.input),
             )
         plan = review.publication
-    for index, batch in enumerate(plan):
+    await guard()
+    if plan["github_id"]:
+        return
+    remote_reviews = await github.pages(token, root)
+    posted = next(
+        (
+            item
+            for item in remote_reviews
+            if item.get("user", {}).get("login") == github.settings.bot_login
+            and plan["marker"] in item.get("body", "")
+            and item.get("state") == "COMMENTED"
+            and item.get("commit_id") == review.head_sha
+        ),
+        None,
+    )
+    if not posted:
         await guard()
-        if batch["github_id"]:
-            continue
-        remote_reviews = await github.pages(token, root)
-        posted = next(
-            (
-                item
-                for item in remote_reviews
-                if item.get("user", {}).get("login") == github.settings.bot_login
-                and batch["marker"] in item.get("body", "")
-                and item.get("state") == "COMMENTED"
-                and item.get("commit_id") == review.head_sha
-            ),
-            None,
+        posted = await github.request(
+            token,
+            "POST",
+            root,
+            data={
+                "commit_id": review.head_sha,
+                "event": "COMMENT",
+                "body": plan["body"],
+                "comments": plan["comments"],
+            },
         )
-        if not posted:
-            await guard()
-            posted = await github.request(
-                token,
-                "POST",
-                root,
-                data={
-                    "commit_id": review.head_sha,
-                    "event": "COMMENT",
-                    "body": batch["body"],
-                    "comments": batch["comments"],
-                },
-            )
-        record_publication(review_id, index, posted["id"])
+    record_publication(review_id, posted["id"])
 
 
-def record_publication(review_id: str, index: int, github_id: int):
+def record_publication(review_id: str, github_id: int):
     with transaction() as db:
         current = db.get(Review, review_id)
-        updated = [dict(item) for item in current.publication]
-        updated[index]["github_id"] = github_id
-        current.publication = updated
-        for item in updated[index]["findings"]:
+        current.publication = {**current.publication, "github_id": github_id}
+        for item in current.publication["findings"]:
             key = (current.repository_id, current.pr_number, item["fingerprint"])
             if not db.get(PostedFinding, key):
                 db.add(

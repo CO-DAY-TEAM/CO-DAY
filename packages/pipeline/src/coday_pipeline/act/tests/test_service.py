@@ -27,7 +27,7 @@ def finding_data(**updates):
 )
 def test_server_renders_sections_and_only_one_suggestion(suggestion):
     result = ReviewResult.model_validate({"findings": [finding_data(suggestion=suggestion)]})
-    batches = build_publication(
+    publication = build_publication(
         Review(id="test", head_sha="head"),
         result,
         ReviewInput(
@@ -45,7 +45,7 @@ def test_server_renders_sections_and_only_one_suggestion(suggestion):
             ]
         ),
     )
-    body = batches[0]["comments"][0]["body"]
+    body = publication["comments"][0]["body"]
     assert all(label in body for label in ("발생 조건", "코드 근거", "수정 방향"))
     assert "`href`" in body
     assert "suggestion: null" not in body
@@ -80,9 +80,9 @@ def test_overlapping_suggestions_keep_priority_and_preserve_findings():
             assert original.model_dump(exclude={"suggestion"}) == updated.model_dump(
                 exclude={"suggestion"}
             )
-    batch = build_publication(Review(id="conflicts", head_sha="head"), result, ReviewInput())[0]
-    assert len(batch["comments"]) == 5
-    assert sum("```suggestion" in c["body"] for c in batch["comments"]) == 3
+    publication = build_publication(Review(id="conflicts", head_sha="head"), result, ReviewInput())
+    assert len(publication["comments"]) == 5
+    assert sum("```suggestion" in c["body"] for c in publication["comments"]) == 3
 
 
 @pytest.mark.parametrize("severity", ["Critical", "High", "Medium", "Low"])
@@ -90,8 +90,8 @@ def test_performance_severity_controls_publication(severity):
     result = ReviewResult.model_validate(
         {"findings": [finding_data(category="performance", severity=severity)]}
     )
-    batch = build_publication(Review(id="severity", head_sha="head"), result, ReviewInput())[0]
-    body = batch["body"] if severity == "Low" else batch["comments"][0]["body"]
+    publication = build_publication(Review(id="severity", head_sha="head"), result, ReviewInput())
+    body = publication["body"] if severity == "Low" else publication["comments"][0]["body"]
     assert "[성능]" in body
     assert f"[{severity}]" in body
-    assert len(batch["comments"]) == (0 if severity == "Low" else 1)
+    assert len(publication["comments"]) == (0 if severity == "Low" else 1)

@@ -93,7 +93,7 @@ class Review(Base):
     ai_calls: Mapped[int] = mapped_column(Integer, default=0)
     input: Mapped[dict | None] = mapped_column(JSON)
     result: Mapped[dict | None] = mapped_column(JSON)
-    publication: Mapped[list | None] = mapped_column(JSON)
+    publication: Mapped[dict | None] = mapped_column(JSON)
     __table_args__ = (
         Index(
             "one_active_review_per_pr",
