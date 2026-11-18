@@ -59,18 +59,18 @@ def test_publication_preserves_suggestion_and_escapes_prose(severity, field):
     }
     data[field] = explanation
     result = ReviewResult.model_validate({"findings": [data]})
-    batch = build_publication(
+    publication = build_publication(
         Review(id="markdown-test", head_sha="head"),
         result,
         ReviewInput(),
-    )[0]
+    )
     if severity == "Low":
-        assert batch["comments"] == []
-        body = batch["body"]
+        assert publication["comments"] == []
+        body = publication["body"]
         assert "```suggestion" not in body
     else:
-        assert len(batch["comments"]) == 1
-        comment = batch["comments"][0]
+        assert len(publication["comments"]) == 1
+        comment = publication["comments"][0]
         assert (comment["line"], comment["start_line"], comment["side"]) == (68, 64, "RIGHT")
         body = comment["body"]
         assert f"```suggestion\n{code}\n```" in body
@@ -134,4 +134,4 @@ async def test_act_sends_escaped_body_to_github_without_network(monkeypatch, sev
         assert payload["comments"] == []
     else:
         assert "```suggestion\n    const mask = ~~value;\n```" in body
-    recorded.assert_called_once_with(review.id, 0, 123)
+    recorded.assert_called_once_with(review.id, 123)
