@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+import tiktoken
 from coday_contracts import AnalyzedFile, DiffLine, Finding, ParsedHunk, ReviewInput, ReviewResult
 from coday_core.config import Settings
 from coday_core.errors import ServiceError
@@ -76,3 +77,31 @@ async def test_judge_reviews_all_files_in_one_call(inputs, monkeypatch):
     payload = json.loads(run.call_args.kwargs["input"])
     assert payload["files"] == [file.model_dump() for file in inputs.files]
     assert result == output
+
+
+# 전체 입력이 정확히 200,000토큰이면 통과하고, 한 토큰이라도 초과하면 모델 호출 전에 종료한다.
+async def test_judge_payload_token_limit(inputs, monkeypatch):
+    settings = Settings(_env_file=None, openai_api_key="test-key")
+    run = AsyncMock(return_value=SimpleNamespace(final_output=ReviewResult()))
+    reserve = AsyncMock()
+    monkeypatch.setattr(service.Runner, "run", run)
+
+    instructions = "리뷰 지침 <|endoftext|> x"
+    payload = {
+        "review_instructions": instructions,
+        "files": [file.model_dump() for file in inputs.files],
+        "related_files": inputs.related_files,
+    }
+    encoding = tiktoken.get_encoding("o200k_base")
+    base_count = len(encoding.encode_ordinary(json.dumps(payload, ensure_ascii=False)))
+    instructions += " x" * (200_000 - base_count)
+
+    await service.judge(inputs, instructions, settings, reserve)
+    assert len(encoding.encode_ordinary(run.call_args.kwargs["input"])) == 200_000
+
+    # " x"는 한 토큰이므로 같은 입력에 한 번 더 붙이면 200,001토큰이 된다.
+    with pytest.raises(ServiceError) as exc:
+        await service.judge(inputs, instructions + " x", settings, reserve)
+    assert exc.value.code == "input_limit"
+    run.assert_awaited_once()
+    reserve.assert_awaited_once()

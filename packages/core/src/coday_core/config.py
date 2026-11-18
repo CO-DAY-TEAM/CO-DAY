@@ -35,8 +35,10 @@ class Settings(BaseSettings):
     max_daily_reviews: int = Field(default=3, ge=1)
     # 개별 파일 크기 제한(바이트)
     max_file_bytes: int = Field(default=2_000_000, ge=1000)
-    # 전체 입력 크기 제한(바이트)
+    # 수집 단계 전체 입력 크기 제한(바이트)
     max_input_bytes: int = Field(default=20_000_000, ge=1000)
+    # 리뷰 요청의 입력 토큰 한도
+    max_input_tokens: int = Field(default=200_000, ge=1)
     # 관련 파일 후보의 최대 크기(바이트)
     max_related_file_bytes: int = Field(default=18000, ge=500)
     # 함께 조회할 관련 파일 수
