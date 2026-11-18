@@ -146,6 +146,7 @@ async def review() -> None:
     changes = changed_files(repo, base, head)
     patterns = ReviewSettings().exclude_patterns
     context = related_files(repo, head, changes, settings, patterns)
+    total_bytes = sum(len(text.encode()) for text in context.values())
     attempts = 0
 
     # 기존 judge()가 AI 요청과 내부 재시도 전에 호출한다. PR 전체의 호출 한도를 계산한다.
@@ -188,7 +189,8 @@ async def review() -> None:
                 path,
             )
 
-            if len(raw) > settings.max_file_bytes:
+            total_bytes += len(raw)
+            if len(raw) > settings.max_file_bytes or total_bytes > settings.max_input_bytes:
                 raise RuntimeError("CO-DAY의 입력 크기 한도를 초과했습니다.")
 
             patch = decode(raw)
