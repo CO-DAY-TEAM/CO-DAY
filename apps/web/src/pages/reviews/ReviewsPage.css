@@ -59,6 +59,7 @@
   margin: 16px;
 }
 .hint {
+  margin-bottom: 16px;
   border: 1px solid var(--border);
   padding: 9px 12px;
   color: var(--muted);
