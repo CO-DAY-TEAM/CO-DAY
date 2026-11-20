@@ -42,11 +42,10 @@ class CollectedFiles:
 
 
 async def collect(
-    job: ReviewJob, settings: ReviewSettings, github: GitHub, token: str, guard
+    job: ReviewJob, settings: ReviewSettings, github: GitHub, token: str
 ) -> CollectedFiles:
     name = f"{job.owner}/{job.repo}"
     root = repo_path(name)
-    await guard()
     pr = await github.request(token, "GET", f"{root}/pulls/{job.pr_number}")
     files = await github.pages(token, f"{root}/pulls/{job.pr_number}/files")
     if len(files) != pr["changed_files"]:
@@ -54,7 +53,6 @@ async def collect(
     output = CollectedFiles()
     total = 0
     for file in files:
-        await guard()
         path = file["filename"]
         reason = exclusion(path, settings.exclude_patterns)
         if reason:
@@ -80,7 +78,6 @@ async def collect(
         output.files.append(
             FilePatch(path, file["status"], patch, file["additions"], file["deletions"])
         )
-    await guard()
     if not output.files or github.settings.related_file_count == 0:
         return output
     # 관련 구현·타입·테스트를 정해진 범위에서 읽기만 하며, 지침 파일은 문맥에 포함하지 않는다.
@@ -124,7 +121,6 @@ async def collect(
         elif source_bytes + item.get("size", 0) > github.settings.max_input_bytes:
             reason = "alias_config_read_budget"
         else:
-            await guard()
             raw = await github.file(token, name, path, job.head_sha)
             source_bytes += len(raw)
             content = decode(raw)
@@ -176,7 +172,6 @@ async def collect(
                 )
             )
             continue
-        await guard()
         raw = await github.file(token, name, file.path, job.head_sha)
         source_bytes += len(raw)
         source = decode(raw)
@@ -223,7 +218,6 @@ async def collect(
             break
         if metadata[path].get("size", 0) > github.settings.max_input_bytes - total:
             continue
-        await guard()
         raw = await github.file(token, name, path, job.head_sha)
         reads += 1
         if not raw or len(raw) > min(

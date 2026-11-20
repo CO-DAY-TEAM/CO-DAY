@@ -146,7 +146,6 @@ async def test_collector_reads_head_imports_and_keeps_limits(related_count):
         ReviewSettings(),
         github,
         "token",
-        AsyncMock(),
     )
     assert list(result.related_files) == (["auth/tokens.ts"] if related_count else [])
     assert github.file.await_count == (2 if related_count else 0)

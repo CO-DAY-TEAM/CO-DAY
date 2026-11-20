@@ -153,7 +153,6 @@ async def test_collector_skips_candidates_that_do_not_fit_and_fills_with_smaller
         ReviewSettings(),
         github,
         "token",
-        AsyncMock(),
     )
     assert list(result.related_files) == ["src/page-b.ts"]
     assert "src/page-a.ts" not in calls and "src/page-empty.ts" not in calls
@@ -220,7 +219,6 @@ async def test_production_and_adapter_select_same_explicit_chart_context(monkeyp
         ReviewSettings(),
         github,
         "token",
-        AsyncMock(),
     )
 
     def git(repo, *args):

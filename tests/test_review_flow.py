@@ -49,6 +49,7 @@ class FakeGitHub:
         self.post_count = 0
         self.draft, self.fork, self.bot = False, False, False
         self.installation_check_count = 0
+        self.state = "open"
 
     async def check_installation(self, installation_id, full_name=None):
         self.installation_check_count += 1
@@ -65,7 +66,7 @@ class FakeGitHub:
     async def request(self, token, method, path, **kwargs):
         if path.endswith("/pulls/1"):
             return {
-                "state": "open",
+                "state": self.state,
                 "draft": self.draft,
                 "title": "테스트 PR",
                 "changed_files": 1,
@@ -516,19 +517,62 @@ def test_unauthenticated_requests_and_invalid_oauth_state_are_rejected(github):
         assert client.get("/api/auth/callback?code=x&state=y").status_code == 400
 
 
-# 수동 리뷰 중 head가 바뀌면 결과 게시를 막고 진행 댓글에 중단과 새 리뷰 요청 방법을 안내하는지 확인한다.
-async def test_new_head_during_manual_review_finishes_progress_comment(github, monkeypatch):
-    review_id = await enqueue(github, 20, 1, "new-head", "manual", "owner")
+# AI 호출 전에 새 커밋이 오거나 PR이 닫히면 AI를 호출하지 않고 중단하는지 확인한다.
+@pytest.mark.parametrize("change", ["new_commit", "closed"])
+async def test_change_before_ai_stops_without_ai_call(github, monkeypatch, change):
+    review_id = await enqueue(github, 20, 1, "before-ai", "automatic")
+    calls = []
 
-    async def changed(*args):
-        github.head = "head2"
+    async def judge(*args):
+        calls.append(args)
         return ReviewResult()
 
-    monkeypatch.setattr(runner, "judge", changed)
+    monkeypatch.setattr(runner, "judge", judge)
+    if change == "new_commit":
+        github.head = "head2"
+    else:
+        github.state = "closed"
     await execute(github, review_id)
+    assert calls == []
     assert github.remote_reviews == []
     assert "실패" in github.comments[0]["body"]
-    assert "새 리뷰" in github.comments[0]["body"]
+    with transaction() as db:
+        assert db.get(Review, review_id).status == "superseded"
+
+
+# AI 호출 후에는 새 커밋이 오거나 PR이 닫혀도 리뷰 대상 커밋에 결과를 게시하는지 확인한다.
+@pytest.mark.parametrize("change", ["new_commit", "closed"])
+async def test_change_after_ai_still_publishes_target_commit(github, monkeypatch, change):
+    review_id = await enqueue(github, 20, 1, "after-ai", "automatic")
+
+    async def judge(*args):
+        if change == "new_commit":
+            github.head = "head2"
+        else:
+            github.state = "closed"
+        return ReviewResult(findings=[finding()])
+
+    monkeypatch.setattr(runner, "judge", judge)
+    await execute(github, review_id)
+    assert github.remote_reviews[0]["commit_id"] == "head1"
+    assert "완료" in github.comments[0]["body"]
+    assert github.installation_check_count == 0
+    with transaction() as db:
+        assert db.get(Review, review_id).status == "completed"
+
+
+# AI 호출 후 다른 커밋의 리뷰로 대체되면 결과를 게시하지 않는지 확인한다.
+async def test_superseded_after_ai_discards_result(github, monkeypatch):
+    review_id = await enqueue(github, 20, 1, "superseded", "automatic")
+
+    async def judge(*args):
+        with transaction() as db:
+            db.get(Review, review_id).status = "superseded"
+        return ReviewResult(findings=[finding()])
+
+    monkeypatch.setattr(runner, "judge", judge)
+    await execute(github, review_id)
+    assert github.remote_reviews == []
     with transaction() as db:
         assert db.get(Review, review_id).status == "superseded"
 

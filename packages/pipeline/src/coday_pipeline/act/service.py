@@ -140,8 +140,7 @@ async def progress(
         ).progress_comment_id = comment_id
 
 
-async def act(github: GitHub, token: str, full_name: str, review_id: str, guard):
-    await guard()
+async def act(github: GitHub, token: str, full_name: str, review_id: str):
     with transaction() as db:
         review = db.get(Review, review_id)
         previous_runs = list(
@@ -184,7 +183,6 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
                 ReviewInput.model_validate(review.input),
             )
         plan = review.publication
-    await guard()
     if plan["github_id"]:
         return
     remote_reviews = await github.pages(token, root)
@@ -200,7 +198,6 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str, guard)
         None,
     )
     if not posted:
-        await guard()
         posted = await github.request(
             token,
             "POST",

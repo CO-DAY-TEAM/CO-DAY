@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 async def analyze(
-    job: ReviewJob, settings: ReviewSettings, github: GitHub, token: str, guard
+    job: ReviewJob, settings: ReviewSettings, github: GitHub, token: str
 ) -> ReviewInput:
-    collected = await collect(job, settings, github, token, guard)
+    collected = await collect(job, settings, github, token)
     if collected.context_audit:
         logger.info("Function context selection: %s", collected.context_audit)
     output = ReviewInput(

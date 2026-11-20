@@ -6,7 +6,6 @@ from datetime import timedelta
 
 from agents import trace
 from coday_contracts import ReviewInput, ReviewJob, ReviewResult, ReviewSettings
-from coday_core.access import disable_access
 from coday_core.db import engine, transaction
 from coday_core.db.models import Delivery, Installation, Repository, Review, now
 from coday_core.errors import GitHubError, ServiceError, Stopped
@@ -72,34 +71,17 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
         installation_id = repo.installation_id
     token = ""
 
-    async def guard(check_head=True):
+    async def guard(check_head=False):
         if (
             connection is not None
             and connection.scalar(text("SELECT pg_backend_pid()")) != backend_pid
         ):
             raise Stopped("lock_lost", "작업 잠금을 잃어 처리를 중단했습니다.")
         with transaction() as db:
-            current = db.get(Review, review_id)
-            current_repo = db.get(Repository, repo.id)
-            install = db.get(Installation, installation_id)
-            if current.status != "running":
+            if db.get(Review, review_id).status != "running":
                 raise Stopped(
                     "superseded", "작업이 취소되었거나 최신 커밋 작업으로 대체되었습니다."
                 )
-            if (
-                not current_repo.active
-                or not install.active
-                or current_repo.installation_id != installation_id
-            ):
-                raise Stopped("access_removed", "저장소 접근이 해제되었습니다.")
-        try:
-            await github.check_installation(installation_id, repo.full_name)
-        except ServiceError as error:
-            if error.code == "access_removed":
-                with transaction() as db:
-                    disable_access(db, installation_id, [repo.id])
-                raise Stopped(error.code, error.message) from error
-            raise
         if check_head:
             current_pr = await github.request(
                 token, "GET", f"{repo_path(repo.full_name)}/pulls/{review.pr_number}"
@@ -110,7 +92,6 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
                 raise Stopped("head_changed", "PR이 closed 상태이거나 head SHA가 변경되었습니다.")
 
     async def reserve_ai_call():
-        await guard()
         with transaction() as db:
             current = db.get(Review, review_id)
             if current.ai_calls >= github.settings.max_ai_calls:
@@ -137,10 +118,8 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
                 "작업 복구 횟수 한도에 도달했습니다. 대시보드에서 재시도해 주세요.",
             )
         token = await github.installation_token(installation_id, repo.id, True)
-        await guard()
         if review.stage == "queued":
             await progress(github, token, repo.full_name, review, "대기", github.settings)
-        await guard()
         await progress(
             github,
             token,
@@ -162,7 +141,6 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
                 ReviewSettings.model_validate(review.settings),
                 github,
                 token,
-                guard,
             )
             with transaction() as db:
                 current = db.get(Review, review_id)
@@ -172,8 +150,9 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
         with transaction() as db:
             existing_result = db.get(Review, review_id).result
         if existing_result is None:
+            # 받은 diff가 리뷰 대상 커밋의 것인지 확인하고, AI 비용을 쓰기 전에 멈출 수 있게 한다.
+            await guard(check_head=True)
             if inputs.files:
-                await guard()
                 try:
                     output = await judge(
                         inputs,
@@ -193,7 +172,6 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
             with transaction() as db:
                 current = db.get(Review, review_id)
                 current.result, current.stage = output.model_dump(), "publish"
-        await guard()
         await progress(
             github,
             token,
@@ -203,8 +181,8 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
             github.settings,
             "분석을 마쳤습니다. 리뷰를 게시하고 있습니다.",
         )
-        await act(github, token, repo.full_name, review_id, guard)
         await guard()
+        await act(github, token, repo.full_name, review_id)
         with transaction() as db:
             has_findings = bool(db.get(Review, review_id).result["findings"])
         description = (
@@ -244,7 +222,6 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
                         .limit(1)
                     )
                 if allowed:
-                    await github.check_installation(installation_id, repo.full_name)
                     if replacement:
                         await progress(
                             github,

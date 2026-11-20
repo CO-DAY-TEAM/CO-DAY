@@ -118,7 +118,7 @@ async def test_act_sends_escaped_body_to_github_without_network(monkeypatch, sev
         request=AsyncMock(return_value={"id": 123}),
         settings=SimpleNamespace(bot_login="test[bot]"),
     )
-    await service.act(github, "test-token", "owner/test", review.id, AsyncMock())
+    await service.act(github, "test-token", "owner/test", review.id)
     args, kwargs = github.request.call_args
     assert args[1:] == ("POST", "/repos/owner/test/pulls/1/reviews")
     payload = kwargs["data"]
