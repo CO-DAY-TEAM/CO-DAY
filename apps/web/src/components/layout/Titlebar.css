@@ -31,6 +31,9 @@
   background: var(--text);
   color: var(--bg);
 }
+.titlebar nav .nav-active:hover {
+  background: color-mix(in srgb, var(--text) 80%, var(--bg));
+}
 .nav-active kbd {
   color: inherit;
 }
