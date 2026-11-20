@@ -24,6 +24,7 @@ export function UserMenu({ user, onLogout }: { user: User; onLogout: () => void 
     <div className="user-wrap" ref={ref}>
       <button
         className="user-button"
+        aria-label={user.login}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen(!open)}

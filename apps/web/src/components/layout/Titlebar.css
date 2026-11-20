@@ -92,6 +92,11 @@
   color: var(--accent);
 }
 
+@media (max-width: 1000px) {
+  .user-name {
+    display: none;
+  }
+}
 @media (max-width: 800px) {
   .titlebar {
     height: auto;
