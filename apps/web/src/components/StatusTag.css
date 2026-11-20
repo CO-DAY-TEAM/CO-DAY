@@ -1,8 +1,11 @@
 .status {
+  display: inline-flex;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 7em;
   font-size: 11px;
   border: 1px solid;
   padding: 2px 6px;
-  width: max-content;
   white-space: nowrap;
 }
 .status-queued {
@@ -22,4 +25,10 @@
 }
 .status-superseded {
   color: var(--purple);
+}
+.status-retry {
+  justify-content: center;
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--bg);
 }
