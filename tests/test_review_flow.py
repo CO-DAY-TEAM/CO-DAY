@@ -48,8 +48,10 @@ class FakeGitHub:
         self.lose_response = False
         self.post_count = 0
         self.draft, self.fork, self.bot = False, False, False
+        self.installation_check_count = 0
 
     async def check_installation(self, installation_id, full_name=None):
+        self.installation_check_count += 1
         if not self.active:
             raise ServiceError("access_removed", "접근 해제", 403)
         return {"id": installation_id, "account": {"id": 10, "login": "owner", "type": "User"}}
@@ -194,11 +196,35 @@ async def test_signed_webhook_queues_one_review_per_delivery(github):
     with transaction() as db:
         assert db.scalar(select(func.count()).select_from(Delivery)) == 1
     await runner.process_delivery(github)
+    assert github.installation_check_count == 0
     with transaction() as db:
         review = db.scalar(select(Review))
         assert db.scalar(select(func.count()).select_from(Review)) == 1
         assert review.status == "queued"
         assert review.trigger == "automatic"
+
+
+# DB의 repo가 active 상태가 아니면 GitHub 설치 확인을 한 번 하고, 앱이 설치되어 있을 때만 리뷰를 등록하는지 확인한다.
+@pytest.mark.parametrize("accessible", [True, False])
+async def test_inactive_repository_checks_installation_once(github, accessible):
+    with transaction() as db:
+        db.get(Repository, 20).active = False
+    github.active = accessible
+    payload = {
+        "installation": {"id": 1},
+        "repository": {"id": 20, "full_name": "owner/test", "private": True},
+        "action": "opened",
+        "number": 1,
+    }
+    if accessible:
+        await ingest(github, "opened", "pull_request", payload)
+    else:
+        with pytest.raises(ServiceError, match="접근 해제"):
+            await ingest(github, "opened", "pull_request", payload)
+    assert github.installation_check_count == 1
+    with transaction() as db:
+        assert db.get(Repository, 20).active is accessible
+        assert db.scalar(select(func.count()).select_from(Review)) == (1 if accessible else 0)
 
 
 # 수동 재리뷰는 현재 head를 새로 분석하고, 이전 리뷰에 있던 문제도 다시 게시하는지 확인한다.
@@ -314,8 +340,9 @@ async def test_pr_automatically_reviews_once_then_requires_comment(github, initi
         "repository": {"id": 20, "full_name": "owner/test", "private": True},
         "number": 1,
     }
-    for action in ("synchronize", "reopened"):
+    for action in ("labeled", "synchronize", "closed", "reopened"):
         await ingest(github, f"before-{action}", "pull_request", {**payload, "action": action})
+    assert github.installation_check_count == 0
     with transaction() as db:
         assert db.scalar(select(func.count()).select_from(Review)) == 0
 

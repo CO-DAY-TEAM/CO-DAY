@@ -34,10 +34,10 @@ async def ingest(github: GitHub, delivery_id: str, event: str, payload: dict):
         return
     if event == "installation" and payload.get("action") in {"deleted", "suspend"}:
         return
-    data = await github.check_installation(installation_id)
-    with transaction() as db:
-        upsert_installation(db, data)
     if event in {"installation", "installation_repositories"}:
+        data = await github.check_installation(installation_id)
+        with transaction() as db:
+            upsert_installation(db, data)
         token = await github.installation_token(installation_id)
         repositories = await github.pages(token, "/installation/repositories", key="repositories")
         with transaction() as db:
@@ -55,42 +55,53 @@ async def ingest(github: GitHub, delivery_id: str, event: str, payload: dict):
             for repo in repositories:
                 upsert_repository(db, installation_id, repo)
         return
-    if event not in {"pull_request", "issue_comment"} or "repository" not in payload:
+    if "repository" not in payload:
         return
-    repository = payload["repository"]
-    await github.check_installation(installation_id, repository["full_name"])
-    with transaction() as db:
-        upsert_repository(db, installation_id, repository)
-    if event == "pull_request" and payload.get("action") in {
-        "opened",
-        "ready_for_review",
-    }:
-        await enqueue(
-            github,
-            repository["id"],
-            payload["number"],
-            delivery_id,
-            "automatic",
-        )
+    action = payload.get("action")
+    comment = payload.get("comment", {})
+    command = rf"@{re.escape(github.settings.github_app_slug)}\s+review"
+    if event == "pull_request" and action in {"opened", "ready_for_review"}:
+        pr_number, trigger, requester = payload["number"], "automatic", None
     elif (
         event == "issue_comment"
-        and payload.get("action") == "created"
+        and action == "created"
         and payload.get("issue", {}).get("pull_request")
+        and comment["user"]["type"] != "Bot"
+        and re.fullmatch(command, comment["body"].strip(), re.IGNORECASE)
     ):
-        comment = payload["comment"]
-        command = rf"@{re.escape(github.settings.github_app_slug)}\s+review"
-        if comment["user"]["type"] != "Bot" and re.fullmatch(
-            command, comment["body"].strip(), re.IGNORECASE
-        ):
-            try:
-                await enqueue(
-                    github,
-                    repository["id"],
-                    payload["issue"]["number"],
-                    delivery_id,
-                    "manual",
-                    requester=comment["user"]["login"],
-                )
-            except ServiceError as error:
-                if error.code not in {"forbidden", "paused", "pr_closed", "daily_limit"}:
-                    raise
+        pr_number, trigger, requester = (
+            payload["issue"]["number"],
+            "manual",
+            comment["user"]["login"],
+        )
+    else:
+        # 리뷰 등록 대상이 아닌 웹훅은 GitHub를 호출하지 않고 끝낸다.
+        return
+    repository = payload["repository"]
+    # 앱 삭제나 저장소 제외는 웹훅을 받는 즉시 DB에 반영된다.
+    # 따라서 repo가 active 상태이고 같은 계정의 설치에 속하면 GitHub에 다시 확인하지 않는다.
+    with transaction() as db:
+        repo = db.get(Repository, repository["id"])
+        should_check_installation = (
+            repo is None or not repo.active or repo.installation_id != installation_id
+        )
+        if not should_check_installation:
+            repo.full_name = repository["full_name"]
+            repo.private = repository.get("private", True)
+    if should_check_installation:
+        data = await github.check_installation(installation_id, repository["full_name"])
+        with transaction() as db:
+            upsert_installation(db, data)
+            upsert_repository(db, installation_id, repository)
+    try:
+        await enqueue(
+            github, repository["id"], pr_number, delivery_id, trigger, requester=requester
+        )
+    except ServiceError as error:
+        if trigger == "automatic" or error.code not in {
+            "forbidden",
+            "paused",
+            "pr_closed",
+            "daily_limit",
+        }:
+            raise

@@ -97,7 +97,6 @@ async def enqueue(
             .limit(1)
         ):
             return None
-        await github.check_installation(install.id, repo.full_name)
         token = await github.installation_token(install.id, repo.id)
         pr = await github.request(token, "GET", f"{repo_path(repo.full_name)}/pulls/{number}")
         if pr["state"] != "open":
