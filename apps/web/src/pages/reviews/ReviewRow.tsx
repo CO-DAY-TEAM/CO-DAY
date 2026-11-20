@@ -7,7 +7,7 @@ export function ReviewTableHead() {
   return (
     <div className="table-head">
       <span>PR</span>
-      <span>레포</span>
+      <span>저장소</span>
       <span>상태</span>
       <span>시각</span>
     </div>
