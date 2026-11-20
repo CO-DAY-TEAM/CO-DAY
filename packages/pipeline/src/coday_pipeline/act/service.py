@@ -143,37 +143,39 @@ async def progress(
 async def act(github: GitHub, token: str, full_name: str, review_id: str):
     with transaction() as db:
         review = db.get(Review, review_id)
-        previous_runs = list(
-            db.scalars(
+        # github_id(GitHub가 부여한 PR 리뷰 ID)가 없는 실행의 목록이다.
+        # GitHub에 리뷰를 올린 뒤 응답을 받지 못해 저장하지 못한 경우다.
+        # 이런 실행은 이미 게시됐을 수 있으므로, GitHub에서 PR 리뷰 목록을 조회해 확인한다.
+        runs_without_github_id = [
+            run
+            for run in db.scalars(
                 select(Review).where(
                     Review.repository_id == review.repository_id,
                     Review.pr_number == review.pr_number,
                     Review.publication.is_not(None),
                 )
             )
-        )
+            if not run.publication["github_id"]
+        ]
     root = f"{repo_path(full_name)}/pulls/{review.pr_number}/reviews"
-    remote_reviews = await github.pages(token, root)
-    # 이전 실행의 게시 응답이 유실된 뒤 superseded가 되어도 통계용 게시 기록을 복구한다.
-    # 복구한 기록은 현재 리뷰의 지적을 제외하는 데 사용하지 않는다.
-    for old in previous_runs:
-        if not old.publication:
-            continue
-        if old.publication["github_id"]:
-            continue
-        posted = next(
-            (
-                item
-                for item in remote_reviews
-                if item.get("user", {}).get("login") == github.settings.bot_login
-                and old.publication["marker"] in item.get("body", "")
-                and item.get("state") == "COMMENTED"
-                and item.get("commit_id") == old.head_sha
-            ),
-            None,
-        )
-        if posted:
-            record_publication(old.id, posted["id"])
+    if runs_without_github_id:
+        remote_reviews = await github.pages(token, root)
+        # 이전 실행의 게시 응답이 유실된 뒤 superseded가 되어도 통계용 게시 기록을 복구한다.
+        # 복구한 기록은 현재 리뷰의 지적을 제외하는 데 사용하지 않는다.
+        for run in runs_without_github_id:
+            posted = next(
+                (
+                    item
+                    for item in remote_reviews
+                    if item.get("user", {}).get("login") == github.settings.bot_login
+                    and run.publication["marker"] in item.get("body", "")
+                    and item.get("state") == "COMMENTED"
+                    and item.get("commit_id") == run.head_sha
+                ),
+                None,
+            )
+            if posted:
+                record_publication(run.id, posted["id"])
     with transaction() as db:
         review = db.get(Review, review_id)
         if review.publication is None:
@@ -185,30 +187,17 @@ async def act(github: GitHub, token: str, full_name: str, review_id: str):
         plan = review.publication
     if plan["github_id"]:
         return
-    remote_reviews = await github.pages(token, root)
-    posted = next(
-        (
-            item
-            for item in remote_reviews
-            if item.get("user", {}).get("login") == github.settings.bot_login
-            and plan["marker"] in item.get("body", "")
-            and item.get("state") == "COMMENTED"
-            and item.get("commit_id") == review.head_sha
-        ),
-        None,
+    posted = await github.request(
+        token,
+        "POST",
+        root,
+        data={
+            "commit_id": review.head_sha,
+            "event": "COMMENT",
+            "body": plan["body"],
+            "comments": plan["comments"],
+        },
     )
-    if not posted:
-        posted = await github.request(
-            token,
-            "POST",
-            root,
-            data={
-                "commit_id": review.head_sha,
-                "event": "COMMENT",
-                "body": plan["body"],
-                "comments": plan["comments"],
-            },
-        )
     record_publication(review_id, posted["id"])
 
 

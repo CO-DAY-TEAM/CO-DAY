@@ -50,6 +50,7 @@ class FakeGitHub:
         self.draft, self.fork, self.bot = False, False, False
         self.installation_check_count = 0
         self.state = "open"
+        self.review_list_fetch_count = 0
 
     async def check_installation(self, installation_id, full_name=None):
         self.installation_check_count += 1
@@ -116,6 +117,7 @@ class FakeGitHub:
                 }
             ]
         if path.endswith("/reviews"):
+            self.review_list_fetch_count += 1
             return self.remote_reviews
         if path.endswith("/comments"):
             return self.comments
@@ -324,8 +326,10 @@ async def test_lost_publication_response_recovers_without_duplicate(github, monk
     await execute(github, review_id)
     with transaction() as db:
         assert db.get(Review, review_id).status == "failed"
+    assert github.review_list_fetch_count == 0
     await retry_review(github, review_id, "owner")
     await execute(github, review_id)
+    assert github.review_list_fetch_count == 1
     assert github.post_count == 1
     assert calls == 1
     with transaction() as db:
@@ -557,6 +561,7 @@ async def test_change_after_ai_still_publishes_target_commit(github, monkeypatch
     assert github.remote_reviews[0]["commit_id"] == "head1"
     assert "완료" in github.comments[0]["body"]
     assert github.installation_check_count == 0
+    assert github.review_list_fetch_count == 0
     with transaction() as db:
         assert db.get(Review, review_id).status == "completed"
 
