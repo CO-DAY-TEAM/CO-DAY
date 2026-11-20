@@ -223,6 +223,7 @@ function App() {
       </footer>
       <StatusBar
         login={user.login}
+        view={view}
         repoCount={repos.repositories.length}
         loading={loading}
         syncedAt={syncedAt}

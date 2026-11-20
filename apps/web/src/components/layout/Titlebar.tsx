@@ -43,9 +43,6 @@ export function Titlebar({
           </button>
         ))}
       </nav>
-      <span className="title-path">
-        {user.login}@co-day: ~/{view}
-      </span>
       <div className="titlebar-actions">
         <button
           className="icon-button"
