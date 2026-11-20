@@ -44,6 +44,9 @@
 .dist-security .bar {
   color: var(--warning);
 }
+.dist-performance .bar {
+  color: color-mix(in srgb, var(--info), var(--accent));
+}
 .dist-style .bar {
   color: var(--info);
 }
