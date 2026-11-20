@@ -16,19 +16,16 @@ export function ReposPage({
 }) {
   return (
     <>
-      <div className="toolbar">
-        <b>{repos.repositories.length}개 연동됨</b>
-        <a
-          className="button primary toolbar-end"
-          href={user.install_url}
-          target="_blank"
-          rel="noreferrer"
-        >
-          ＋ 저장소 연결 ↗
-        </a>
-      </div>
       {repos.repositories.length ? (
         <div className="repo-grid">
+          <a
+            className="add-repo"
+            href={user.install_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            ＋<span>저장소 연결 관리 ↗</span>
+          </a>
           {repos.repositories.map((repo) => (
             <RepoCard
               key={repo.id}
@@ -40,14 +37,6 @@ export function ReposPage({
               onOpenSettings={() => onOpenSettings(repo.id)}
             />
           ))}
-          <a
-            className="add-repo"
-            href={user.install_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            ＋<span>저장소 연결 관리 ↗</span>
-          </a>
         </div>
       ) : (
         <EmptyState boxed>

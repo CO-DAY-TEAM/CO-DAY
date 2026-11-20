@@ -16,7 +16,6 @@
   color: var(--muted);
   margin-top: 2px;
 }
-/* .switch는 레포 카드에서도 ON/OFF 표시로 쓴다 */
 .switch {
   color: var(--muted);
   white-space: pre;

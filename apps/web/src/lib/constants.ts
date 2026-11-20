@@ -9,6 +9,11 @@ export const statuses: Record<string, string> = {
   superseded: '중단',
 }
 export const statusFilters = ['all', 'running', 'completed', 'queued', 'failed']
+export const repoStates = {
+  paused: '중지됨',
+  auto: '자동 리뷰',
+  manual: '수동 리뷰',
+}
 export const categories: Record<string, string> = {
   bug: '버그',
   security: '보안',

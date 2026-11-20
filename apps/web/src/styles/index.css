@@ -243,12 +243,6 @@ select:disabled {
   margin-bottom: 22px;
   color: var(--muted);
 }
-.toolbar b {
-  color: var(--text);
-}
-.toolbar-end {
-  margin-left: auto;
-}
 
 @media (max-width: 1000px) {
   .title-path {

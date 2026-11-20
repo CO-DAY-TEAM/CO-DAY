@@ -46,7 +46,7 @@
   }
 }
 @media (max-width: 800px) {
-  .statusbar > span,
+  .statusbar > span:not(:first-of-type),
   .statusbar > em {
     display: none;
   }
