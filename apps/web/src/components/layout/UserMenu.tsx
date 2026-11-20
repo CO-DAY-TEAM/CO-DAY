@@ -29,7 +29,20 @@ export function UserMenu({ user, onLogout }: { user: User; onLogout: () => void 
         onClick={() => setOpen(!open)}
       >
         <span className="avatar">{user.login.slice(0, 2).toUpperCase()}</span>
-        {user.login} ⌄
+        <span className="user-name">{user.login}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2 3 5 6 8 3" />
+        </svg>
       </button>
       {open && (
         <div className="dropdown" role="menu" onClick={() => setOpen(false)}>
