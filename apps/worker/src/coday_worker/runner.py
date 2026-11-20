@@ -118,8 +118,6 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
                 "작업 복구 횟수 한도에 도달했습니다. 대시보드에서 재시도해 주세요.",
             )
         token = await github.installation_token(installation_id, repo.id, True)
-        if review.stage == "queued":
-            await progress(github, token, repo.full_name, review, "대기", github.settings)
         await progress(
             github,
             token,
