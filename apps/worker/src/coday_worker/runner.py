@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from agents import trace
 from coday_contracts import ReviewInput, ReviewJob, ReviewResult, ReviewSettings
-from coday_core.access import disable_access, effective_settings
+from coday_core.access import disable_access
 from coday_core.db import engine, transaction
 from coday_core.db.models import Delivery, Installation, Repository, Review, now
 from coday_core.errors import GitHubError, ServiceError, Stopped
@@ -54,23 +54,6 @@ def claim():
                     continue
                 if review.status == "running":
                     review.recoveries += 1
-                repo = db.get(Repository, review.repository_id)
-                install = db.get(Installation, repo.installation_id)
-                if (
-                    not repo.active
-                    or not install.active
-                    or install.paused
-                    or (
-                        review.trigger == "automatic"
-                        and review.attempt == 1
-                        and not effective_settings(repo, install).automatic
-                        and review.status == "queued"
-                    )
-                ):
-                    review.status = "cancelled"
-                    connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": key})
-                    connection.close()
-                    continue
                 review.status = "running"
                 review.heartbeat_at = review.updated_at = now()
             pid = connection.scalar(text("SELECT pg_backend_pid()"))
