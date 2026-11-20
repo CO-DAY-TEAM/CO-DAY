@@ -12,6 +12,8 @@
   --warning: #f2b640;
   --danger: #ff5c5c;
   --purple: #b48cff;
+  /* select 화살표: 프로필 메뉴 화살표와 같은 모양, select 글자와 같은 --muted 색 */
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='none' stroke='%237d8790' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3 5 6 8 3'/%3E%3C/svg%3E");
 
   color-scheme: dark;
   font-family: 'JetBrains Mono', 'Noto Sans KR', monospace;
@@ -38,6 +40,7 @@
   --warning: #9a6500;
   --danger: #cc3535;
   --purple: #7352b5;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='none' stroke='%235e656b' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3 5 6 8 3'/%3E%3C/svg%3E");
 
   color-scheme: light;
 }
@@ -90,10 +93,11 @@ kbd {
   color: var(--muted);
 }
 select {
-  background: var(--panel);
+  appearance: none;
+  background: var(--panel) var(--select-arrow) no-repeat right 12px center;
   border: 1px solid var(--border-strong);
   border-radius: 2px;
-  padding: 7px 30px 7px 9px;
+  padding: 7px 34px 7px 9px;
   max-width: 100%;
 }
 textarea {
