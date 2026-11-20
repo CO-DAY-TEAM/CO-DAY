@@ -155,7 +155,6 @@ function App() {
       <main className="page">
         <header className="page-head">
           <div>
-            <div className="breadcrumb">co-day / {current.title}</div>
             <h1 className="command">
               <span className="accent">$</span> {command}
             </h1>
