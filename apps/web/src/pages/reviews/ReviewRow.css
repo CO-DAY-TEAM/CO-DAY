@@ -14,7 +14,6 @@
 .review-row {
   min-height: 52px;
   border-bottom: 1px solid var(--border);
-  border-left: 3px solid transparent;
 }
 .review-row:last-child {
   border-bottom: 0;
@@ -22,12 +21,9 @@
 .review-row:hover {
   background: var(--panel-hover);
 }
+/* 알림 링크(?review=)로 들어온 리뷰만 옅은 배경으로 강조한다 */
 .review-row.highlight {
-  border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
-}
-.review-row.failed {
-  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--info) 8%, var(--panel));
 }
 .pr-cell {
   display: flex;

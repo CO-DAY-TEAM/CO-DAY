@@ -27,7 +27,7 @@ export function ReviewRow({
 }) {
   return (
     <article
-      className={`review-row ${highlight ? 'highlight' : ''} ${review.status === 'failed' ? 'failed' : ''}`}
+      className={`review-row ${highlight ? 'highlight' : ''}`}
     >
       <div className="pr-cell">
         <span className="pr-symbol" aria-hidden="true">
