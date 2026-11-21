@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="18" viewBox="0 0 112 18" role="img" aria-label="Maintainability">
+  <title>Maintainability</title>
+  <rect x=".5" y=".5" width="111" height="17" rx="8.5" fill="#D8DEE4" stroke="#424A53"/>
+  <path d="M10.8 3.7 8.7 5.8 6.5 5.2 5.9 3 8 1a3.5 3.5 0 0 0-4 4.7L1.5 8.2a1.6 1.6 0 0 0 2.3 2.3L6.3 8a3.5 3.5 0 0 0 4.5-4.3Z" transform="translate(6 3)" fill="none" stroke="#24292F" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="22" y="12.5" fill="#24292F" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Maintainability</text>
+</svg>

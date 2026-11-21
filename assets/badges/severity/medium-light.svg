@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="71" height="18" viewBox="0 0 71 18" role="img" aria-label="Medium">
+  <title>Medium</title>
+  <rect x=".5" y=".5" width="70" height="17" rx="8.5" fill="#FFF8D9" stroke="#8A6500"/>
+  <circle cx="9" cy="9" r="2.5" fill="#8A6500"/>
+  <text x="16" y="12.5" fill="#6A5000" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Medium</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="18" viewBox="0 0 64 18" role="img" aria-label="Critical">
+  <title>Critical</title>
+  <rect x=".5" y=".5" width="63" height="17" rx="8.5" fill="#FFF1F0" stroke="#B42318"/>
+  <circle cx="9" cy="9" r="2.5" fill="#B42318"/>
+  <text x="16" y="12.5" fill="#8F211A" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Critical</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="49" height="18" viewBox="0 0 49 18" role="img" aria-label="High">
+  <title>High</title>
+  <rect x=".5" y=".5" width="48" height="17" rx="8.5" fill="#FFF2E6" stroke="#AA4800"/>
+  <circle cx="9" cy="9" r="2.5" fill="#AA4800"/>
+  <text x="16" y="12.5" fill="#8A3B00" font-family="system-ui, sans-serif" font-size="11" font-weight="600">High</text>
+</svg>
