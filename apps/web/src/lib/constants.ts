@@ -45,3 +45,10 @@ export const views: {
     description: '팀의 공통 기준과 저장소별 리뷰 방식을 관리하세요.',
   },
 ]
+
+export const loginErrors: Record<string, string> = {
+  login_failed: 'GitHub 로그인이 만료되었거나 승인되지 않았습니다.',
+  oauth_state: '로그인 확인이 만료되었습니다. 다시 로그인해 주세요.',
+  not_configured: '운영자가 GitHub App 연결을 먼저 설정해야 합니다.',
+  github_error: 'GitHub 요청을 처리하지 못했습니다. 권한과 연결 상태를 확인해 주세요.',
+}
