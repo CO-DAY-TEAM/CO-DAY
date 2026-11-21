@@ -46,7 +46,6 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             summary += f"- {plain(path)}: {plain(reason)}\n"
         summary += "\n</details>\n"
     comments, metadata = [], []
-    body = summary
     seen = set()
     for position, finding in enumerate(publication_result.findings):
         # 이번 리뷰 결과 안에서 완전히 같은 지적만 제거하고, 이전 리뷰와는 비교하지 않는다.
@@ -66,26 +65,23 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
             ("수정 방향", finding.recommendation),
         ):
             text += f"\n\n**{label}**\n\n{review_text(value)}"
-        if finding.suggestion is not None and finding.severity != "Low":
+        if finding.suggestion is not None:
             text += f"\n\n```suggestion\n{finding.suggestion}\n```"
         metadata.append({"fingerprint": key, "category": finding.category})
-        if finding.severity == "Low":
-            body += f"\n### {plain(finding.path)}:{finding.line}\n{text}\n"
-        else:
-            comment = {
-                "path": finding.path,
-                "line": finding.line,
-                "side": finding.side,
-                "body": text,
-            }
-            if finding.start_line and finding.start_line < finding.line:
-                comment.update(start_line=finding.start_line, start_side=finding.side)
-            comments.append(comment)
-    if len(body) > 60000:
+        comment = {
+            "path": finding.path,
+            "line": finding.line,
+            "side": finding.side,
+            "body": text,
+        }
+        if finding.start_line and finding.start_line < finding.line:
+            comment.update(start_line=finding.start_line, start_side=finding.side)
+        comments.append(comment)
+    if len(summary) > 60000:
         raise ServiceError("publication_limit", "리뷰 요약이 GitHub 게시 크기 한도를 넘었습니다.")
     marker = f"<!-- coday:review:{review.id} -->"
     return {
-        "body": f"{body}\n\n{marker}",
+        "body": f"{summary}\n\n{marker}",
         "marker": marker,
         "comments": comments,
         "findings": metadata,
