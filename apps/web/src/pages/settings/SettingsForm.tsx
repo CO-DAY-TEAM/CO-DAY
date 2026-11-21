@@ -81,7 +81,7 @@ export function SettingsForm({
 
   return (
     <Panel
-      title={`리뷰 정책 · ${repository ? '저장소 설정' : '공통 설정'}`}
+      title="리뷰 정책"
       className="policy"
     >
       <div className="policy-head">

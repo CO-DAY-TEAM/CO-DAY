@@ -7,7 +7,7 @@ export function ReviewTableHead() {
   return (
     <div className="table-head">
       <span>PR</span>
-      <span>레포</span>
+      <span>저장소</span>
       <span>상태</span>
       <span>시각</span>
     </div>
@@ -27,7 +27,7 @@ export function ReviewRow({
 }) {
   return (
     <article
-      className={`review-row ${highlight ? 'highlight' : ''} ${review.status === 'failed' ? 'failed' : ''}`}
+      className={`review-row ${highlight ? 'highlight' : ''}`}
     >
       <div className="pr-cell">
         <span className="pr-symbol" aria-hidden="true">
@@ -46,20 +46,21 @@ export function ReviewRow({
         </span>
       </div>
       <code className="repo-cell">{review.repository}</code>
-      <StatusTag status={review.status} />
+      {review.status === 'failed' && review.can_retry ? (
+        <button
+          className="status status-retry"
+          onClick={() => onRetry(review)}
+          disabled={!!retrying}
+        >
+          {retrying === review.id ? '⠋ 요청 중…' : '재시도'}
+        </button>
+      ) : (
+        <StatusTag status={review.status} />
+      )}
       <span className="row-end">
         <span className="muted" title={date(review.created_at)}>
           {ago(review.created_at)}
         </span>
-        {review.status === 'failed' && review.can_retry && (
-          <button
-            className="button small"
-            onClick={() => onRetry(review)}
-            disabled={!!retrying}
-          >
-            {retrying === review.id ? '⠋ 요청 중…' : '재시도'}
-          </button>
-        )}
         <a
           className="external-link"
           href={review.github_url}
