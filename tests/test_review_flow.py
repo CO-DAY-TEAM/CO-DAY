@@ -260,6 +260,7 @@ async def test_retry_reuses_full_input_and_frozen_configuration(github, monkeypa
     with transaction() as db:
         assert db.get(Review, review_id).status == "failed"
         assert db.get(Review, review_id).result is None
+        assert db.get(Review, review_id).error_code == "analysis_failed"
         install = db.get(Installation, 1)
         install.settings = {
             **install.settings,
@@ -267,6 +268,9 @@ async def test_retry_reuses_full_input_and_frozen_configuration(github, monkeypa
             "automatic": False,
         }
     assert not github.remote_reviews
+    assert "## CO-DAY · 실패" in github.comments[0]["body"]
+    assert "AI 분석에 실패했습니다." in github.comments[0]["body"]
+    assert "게시할 문제를 발견하지 못했습니다." not in github.comments[0]["body"]
 
     async def recovered(inputs, instructions, settings, reserve_attempt):
         calls.append(inputs.files)
@@ -278,6 +282,7 @@ async def test_retry_reuses_full_input_and_frozen_configuration(github, monkeypa
     await execute(github, review_id)
     assert calls == [files, files]
     assert len(github.remote_reviews) == 1
+    assert "분석 범위에서 게시할 문제를 발견하지 못했습니다." in github.remote_reviews[0]["body"]
     with transaction() as db:
         assert db.get(Review, review_id).status == "completed"
 
