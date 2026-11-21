@@ -41,7 +41,6 @@ function App() {
   const { data, loading, setLoading, syncedAt } = useReviews(
     user,
     selected,
-    page,
     revision,
     setError,
   )
@@ -96,9 +95,14 @@ function App() {
     setFocusedReview(null)
   }
 
-  function changePage(value: number) {
-    setLoading(true)
-    setPage(value)
+  function changeStatusFilter(value: string) {
+    setStatusFilter(value)
+    setPage(1)
+  }
+
+  function changeQuery(value: string) {
+    setQuery(value)
+    setPage(1)
   }
 
   async function retry(review: Review) {
@@ -183,12 +187,12 @@ function App() {
             loading={loading}
             focusedReview={focusedReview}
             statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
+            onStatusFilterChange={changeStatusFilter}
             query={query}
-            onQueryChange={setQuery}
+            onQueryChange={changeQuery}
             searchRef={searchRef}
             page={page}
-            onPageChange={changePage}
+            onPageChange={setPage}
             retrying={retrying}
             onRetry={retry}
           />

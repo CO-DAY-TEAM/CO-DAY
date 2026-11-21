@@ -4,7 +4,7 @@ from coday_core.db import transaction
 from coday_core.db.models import PostedFinding, Repository, Review
 from coday_core.errors import ServiceError
 from coday_core.queue import retry_review
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Request
 from sqlalchemy import func, select
 
 from coday_api.dependencies import authorized_repo, current_session, mutation_session, user_token
@@ -34,9 +34,7 @@ def serialize(review: Review, repo: Repository):
 
 
 @router.get("")
-async def list_reviews(
-    request: Request, repository_id: int | None = None, page: int = Query(default=1, ge=1)
-):
+async def list_reviews(request: Request, repository_id: int | None = None):
     session = await current_session(request)
     if repository_id is not None:
         repo, _, _, permission = await authorized_repo(request, repository_id, session)
@@ -52,9 +50,8 @@ async def list_reviews(
             Review.repository_id.in_(ids),
             Review.status.in_(["queued", "running", "completed", "failed"]),
         )
-        reviews = list(
-            db.scalars(query.order_by(Review.created_at.desc()).offset((page - 1) * 30).limit(31))
-        )
+        # 대시보드가 전체 기록에서 검색·필터링할 수 있도록 페이지로 나누지 않고 모두 반환한다
+        reviews = list(db.scalars(query.order_by(Review.created_at.desc())))
         reviewed = (
             select(Review.repository_id, Review.pr_number)
             .where(Review.repository_id.in_(ids), Review.status == "completed")
@@ -75,9 +72,8 @@ async def list_reviews(
                 **serialize(review, repo_map[review.repository_id][0]),
                 "can_retry": repo_map[review.repository_id][1] in {"write", "maintain", "admin"},
             }
-            for review in reviews[:30]
+            for review in reviews
         ],
-        "has_more": len(reviews) > 30,
         "stats": {"reviewed_prs": count, "findings": sum(types.values()), "categories": types},
     }
 
