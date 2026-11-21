@@ -64,16 +64,11 @@ def test_publication_preserves_suggestion_and_escapes_prose(severity, field):
         result,
         ReviewInput(),
     )
-    if severity == "Low":
-        assert publication["comments"] == []
-        body = publication["body"]
-        assert "```suggestion" not in body
-    else:
-        assert len(publication["comments"]) == 1
-        comment = publication["comments"][0]
-        assert (comment["line"], comment["start_line"], comment["side"]) == (68, 64, "RIGHT")
-        body = comment["body"]
-        assert f"```suggestion\n{code}\n```" in body
+    assert len(publication["comments"]) == 1
+    comment = publication["comments"][0]
+    assert (comment["line"], comment["start_line"], comment["side"]) == (68, 64, "RIGHT")
+    body = comment["body"]
+    assert f"```suggestion\n{code}\n```" in body
     assert escape_prose_tildes(explanation) in body
     assert r"65\~67행" in body and r"44\~49행" in body
     assert "`~mask`와 ``a`~b``" in body
@@ -127,11 +122,8 @@ async def test_act_sends_escaped_body_to_github_without_network(monkeypatch, sev
     args, kwargs = github.request.call_args
     assert args[1:] == ("POST", "/repos/owner/test/pulls/1/reviews")
     payload = kwargs["data"]
-    body = payload["body"] if severity == "Low" else payload["comments"][0]["body"]
+    body = payload["comments"][0]["body"]
     assert escape_prose_tildes(DISPOSE_EVIDENCE) in body
     assert r"`~mask`를 유지하고 \~\~설명\~\~" in body
-    if severity == "Low":
-        assert payload["comments"] == []
-    else:
-        assert "```suggestion\n    const mask = ~~value;\n```" in body
+    assert "```suggestion\n    const mask = ~~value;\n```" in body
     recorded.assert_called_once_with(review.id, 123)
