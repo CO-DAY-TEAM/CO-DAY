@@ -1,5 +1,6 @@
 # 리뷰 결과를 GitHub PR에 게시
 import hashlib
+from collections import Counter
 
 from coday_contracts import ReviewInput, ReviewResult
 from coday_core.config import Settings
@@ -9,8 +10,8 @@ from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
 from sqlalchemy import select
 
-from coday_pipeline.act.markdown import escape_prose_tildes
-from coday_pipeline.suggestion_conflicts import resolve_suggestion_conflicts
+from coday_pipeline.act.markdown import escape_prose_tildes, excluded_file_row
+from coday_pipeline.suggestion_conflicts import SEVERITY_ORDER, resolve_suggestion_conflicts
 
 CATEGORIES = {
     "bug": "버그",
@@ -30,22 +31,33 @@ def review_text(text: str) -> str:
     return escape_prose_tildes(plain(text))
 
 
+def build_review_body(review: Review, inputs: ReviewInput, counts: Counter[str]) -> str:
+    excluded_count = len(inputs.excluded_files)
+    summary = f"## CO-DAY 리뷰\n\n분석 커밋: `{review.head_sha[:12]}`\n\n"
+    summary += f"분석 파일 **{len(inputs.files)}개** · 제외 파일 **{excluded_count}개**\n\n"
+    total = counts.total()
+    if total:
+        summary += "### 📊 Review Summary\n\n| Severity | Count |\n|---|---:|\n"
+        summary += "".join(f"| {severity} | {counts[severity]} |\n" for severity in SEVERITY_ORDER)
+        summary += f"| **Total** | **{total}** |\n\n"
+        summary += f"총 {total}건의 지적 사항을 발견했습니다. 상세 내용은 인라인 리뷰 댓글을 확인해 주세요."
+    elif not inputs.files:
+        summary += "이번 PR에는 리뷰 대상 파일이 없습니다."
+    else:
+        summary += "분석 범위에서 게시할 문제를 발견하지 못했습니다."
+    if excluded_count:
+        rows = "\n".join(
+            excluded_file_row(path, reason) for path, reason in inputs.excluded_files.items()
+        )
+        summary += f"\n\n<details>\n<summary>제외 파일 ({excluded_count}개)</summary>\n\n"
+        summary += f"{rows}\n\n</details>"
+    return summary
+
+
 def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput):
     publication_result = resolve_suggestion_conflicts(result)
-    summary = f"## CO-DAY 리뷰\n\n분석 커밋: `{review.head_sha[:12]}`\n\n"
-    summary += (
-        f"분석 파일 **{len(inputs.files)}개** · 제외 파일 **{len(inputs.excluded_files)}개**\n\n"
-    )
-    if not inputs.files:
-        summary += "리뷰 대상 없음: 제외 규칙 적용 후 분석할 텍스트 변경이 없습니다.\n"
-    elif not result.findings:
-        summary += "지적 없음: 분석 범위에서 게시할 문제를 발견하지 못했습니다.\n"
-    if inputs.excluded_files:
-        summary += "\n<details><summary>제외 파일과 사유</summary>\n\n"
-        for path, reason in inputs.excluded_files.items():
-            summary += f"- {plain(path)}: {plain(reason)}\n"
-        summary += "\n</details>\n"
     comments, metadata = [], []
+    counts: Counter[str] = Counter()
     seen = set()
     for position, finding in enumerate(publication_result.findings):
         # 이번 리뷰 결과 안에서 완전히 같은 지적만 제거하고, 이전 리뷰와는 비교하지 않는다.
@@ -77,6 +89,8 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
         if finding.start_line and finding.start_line < finding.line:
             comment.update(start_line=finding.start_line, start_side=finding.side)
         comments.append(comment)
+        counts[finding.severity] += 1
+    summary = build_review_body(review, inputs, counts)
     if len(summary) > 60000:
         raise ServiceError("publication_limit", "리뷰 요약이 GitHub 게시 크기 한도를 넘었습니다.")
     marker = f"<!-- coday:review:{review.id} -->"
