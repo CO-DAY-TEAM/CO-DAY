@@ -176,7 +176,7 @@ export function ReviewsPage({
       <div className="pagination">
         <button
           className="button"
-          disabled={currentPage === 1}
+          disabled={currentPage === 1 || loading}
           onClick={() => onPageChange(currentPage - 1)}
         >
           ← 이전
@@ -184,7 +184,7 @@ export function ReviewsPage({
         <span>{currentPage} 페이지</span>
         <button
           className="button"
-          disabled={currentPage === lastPage}
+          disabled={currentPage === lastPage || loading}
           onClick={() => onPageChange(currentPage + 1)}
         >
           다음 →
