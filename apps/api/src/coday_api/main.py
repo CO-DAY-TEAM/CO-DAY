@@ -8,9 +8,11 @@ from coday_core.db import transaction
 from coday_core.errors import ServiceError
 from coday_core.github import GitHub
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from starlette.exceptions import HTTPException
 
 from coday_api.routes import auth, repos, reviews, settings, webhooks
 
@@ -32,6 +34,13 @@ for router in (auth.router, repos.router, reviews.router, settings.router, webho
 @app.exception_handler(ServiceError)
 async def service_error(request: Request, error: ServiceError):
     return JSONResponse({"code": error.code, "message": error.message}, status_code=error.status)
+
+
+@app.exception_handler(HTTPException)
+async def not_found(request: Request, error: HTTPException):
+    if error.status_code == 404 and not request.url.path.startswith("/api/"):
+        return RedirectResponse("/", status_code=303)
+    return await http_exception_handler(request, error)
 
 
 @app.middleware("http")
