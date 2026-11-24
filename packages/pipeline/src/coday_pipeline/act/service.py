@@ -1,8 +1,10 @@
 # 리뷰 결과를 GitHub PR에 게시
 import hashlib
+import re
 from collections import Counter
 
 from coday_contracts import ReviewInput, ReviewResult
+from coday_contracts.review_result import Finding
 from coday_core.config import Settings
 from coday_core.db import transaction
 from coday_core.db.models import PostedFinding, PullRequest, Review
@@ -10,7 +12,12 @@ from coday_core.errors import ServiceError
 from coday_core.github import GitHub, repo_path
 from sqlalchemy import select
 
-from coday_pipeline.act.markdown import escape_prose_tildes, excluded_file_row
+from coday_pipeline.act.markdown import (
+    BADGE_BASE_URL,
+    escape_prose_tildes,
+    excluded_file_row,
+    render_review_badges,
+)
 from coday_pipeline.suggestion_conflicts import SEVERITY_ORDER, resolve_suggestion_conflicts
 
 CATEGORIES = {
@@ -29,6 +36,34 @@ def plain(text: str) -> str:
 
 def review_text(text: str) -> str:
     return escape_prose_tildes(plain(text))
+
+
+# 여러 줄 또는 블록으로 시작하는 필드는 각각의 Markdown 문단을 유지한다.
+MARKDOWN_BLOCK_START = re.compile(
+    r"^[ \t]|^(?:[#>~]|`{3,}|(?:[-+*]|[-*_]{3,}|\d{1,9}[.)])(?:\s|$))"
+)
+
+
+def build_inline_comment(finding: Finding, *, base_url: str = BADGE_BASE_URL) -> str:
+    title = review_text(finding.title)
+    try:
+        badges = render_review_badges(finding.severity, finding.category, base_url=base_url)
+    except ValueError:
+        title = f"**[{CATEGORIES[finding.category]}] [{finding.severity}] {title}**"
+    else:
+        title = f"{badges}\n\n**{title}**"
+
+    condition, evidence = finding.condition, finding.evidence
+    block_content = any(
+        "\n" in value or "\r" in value or MARKDOWN_BLOCK_START.match(value)
+        for value in (condition, evidence)
+    )
+    separator = "\n\n" if block_content else " "
+    explanation = separator.join((review_text(condition), review_text(evidence)))
+    text = f"{title}\n\n{explanation}\n\n{review_text(finding.recommendation)}"
+    if finding.suggestion is not None:
+        text += f"\n\n```suggestion\n{finding.suggestion}\n```"
+    return text
 
 
 def build_review_body(review: Review, inputs: ReviewInput, counts: Counter[str]) -> str:
@@ -67,24 +102,12 @@ def build_publication(review: Review, result: ReviewResult, inputs: ReviewInput)
         seen.add(signature)
         # 리뷰 실행 ID와 결과 내 위치로 각 게시 항목의 fingerprint를 만든다.
         key = hashlib.sha256(f"{review.id}:{position}".encode()).hexdigest()
-        text = (
-            f"**[{CATEGORIES[finding.category]}] "
-            f"[{finding.severity}] {review_text(finding.title)}**"
-        )
-        for label, value in (
-            ("발생 조건", finding.condition),
-            ("코드 근거", finding.evidence),
-            ("수정 방향", finding.recommendation),
-        ):
-            text += f"\n\n**{label}**\n\n{review_text(value)}"
-        if finding.suggestion is not None:
-            text += f"\n\n```suggestion\n{finding.suggestion}\n```"
         metadata.append({"fingerprint": key, "category": finding.category})
         comment = {
             "path": finding.path,
             "line": finding.line,
             "side": finding.side,
-            "body": text,
+            "body": build_inline_comment(finding),
         }
         if finding.start_line and finding.start_line < finding.line:
             comment.update(start_line=finding.start_line, start_side=finding.side)
