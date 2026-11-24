@@ -9,7 +9,7 @@ import { useRepos } from './hooks/useRepos'
 import { useReviews } from './hooks/useReviews'
 import { useShortcuts } from './hooks/useShortcuts'
 import { useTheme } from './hooks/useTheme'
-import { views } from './lib/constants'
+import { loginErrors, views } from './lib/constants'
 import type { View } from './lib/constants'
 import { AuthLoading } from './pages/landing/AuthLoading'
 import { LandingPage } from './pages/landing/LandingPage'
@@ -17,6 +17,16 @@ import { ReposPage } from './pages/repos/ReposPage'
 import { ReviewsPage } from './pages/reviews/ReviewsPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import './App.css'
+
+function takeLoginError() {
+  const url = new URL(window.location.href)
+  const code = url.searchParams.get('login_error')
+  if (code === null) return ''
+  url.searchParams.delete('login_error')
+  window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+  return loginErrors[code] ?? ''
+}
+const initialLoginError = takeLoginError()
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -28,7 +38,7 @@ function App() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [focusedReview, setFocusedReview] = useState<Review | null>(null)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialLoginError)
   const [notice, setNotice] = useState('')
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)

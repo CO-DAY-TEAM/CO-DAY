@@ -3,6 +3,7 @@ import hmac
 import json
 from contextlib import contextmanager
 from datetime import timedelta
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from coday_api.main import app
@@ -491,7 +492,36 @@ def test_unauthenticated_requests_and_invalid_oauth_state_are_rejected(github):
     with TestClient(app) as client:
         assert client.get("/api/reviews?repository_id=20").status_code == 401
         assert client.post("/api/reviews/unknown/retry").status_code == 401
-        assert client.get("/api/auth/callback?code=x&state=y").status_code == 400
+        response = client.get("/api/auth/callback?code=x&state=y", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/?login_error=oauth_state"
+
+
+# 존재하지 않는 경로는 첫 화면으로 리다이렉트하고, 존재하지 않는 /api/ 경로는 그대로 404를 돌려주는지 확인한다.
+def test_unknown_page_redirects_home_but_api_stays_404(github):
+    with TestClient(app) as client:
+        page = client.get("/does-not-exist", follow_redirects=False)
+        assert page.status_code == 303
+        assert page.headers["location"] == "/"
+        assert client.get("/api/does-not-exist").status_code == 404
+
+
+# 로그인 콜백이 실패하면 return_to의 쿼리를 남긴 채 오류 코드를 붙여 리다이렉트하는지 확인한다.
+def test_login_callback_failure_redirects_to_ui(github, monkeypatch):
+    async def rejected_oauth(**data):
+        raise ServiceError("login_failed", "GitHub 로그인이 만료되었거나 승인되지 않았습니다.", 401)
+
+    with TestClient(app) as client:
+        app.state.settings = Settings(_env_file=None, github_client_id="client")
+        monkeypatch.setattr(app.state.github, "oauth", rejected_oauth)
+        login = client.get(
+            "/api/auth/login", params={"return_to": "/?review=123"}, follow_redirects=False
+        )
+        state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+
+        response = client.get(f"/api/auth/callback?code=x&state={state}", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/?review=123&login_error=login_failed"
 
 
 # 수동 리뷰 중 head가 바뀌면 결과 게시를 막고 진행 댓글에 중단과 새 리뷰 요청 방법을 안내하는지 확인한다.
