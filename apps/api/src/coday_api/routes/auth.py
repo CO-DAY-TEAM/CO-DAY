@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import timedelta
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from coday_core.db import transaction
 from coday_core.db.models import LoginSession, OAuthState, now
@@ -18,8 +18,13 @@ from coday_api.dependencies import cipher, current_session, digest, mutation_ses
 router = APIRouter(prefix="/api/auth")
 
 
-def login_error(code: str) -> RedirectResponse:
-    return RedirectResponse(f"/?{urlencode({'login_error': code})}", status_code=303)
+# return_to의 쿼리를 남긴 채 오류 코드를 붙여 리다이렉트한다
+# 예: /?review=123 → /?review=123&login_error=login_failed
+def login_error(code: str, return_to: str = "/") -> RedirectResponse:
+    parts = urlsplit(return_to)
+    error = urlencode({"login_error": code})
+    query = f"{parts.query}&{error}" if parts.query else error
+    return RedirectResponse(urlunsplit(parts._replace(query=query)), status_code=303)
 
 
 @router.get("/login")
@@ -72,12 +77,18 @@ async def login(request: Request, return_to: str = "/"):
 @router.get("/callback")
 async def callback(request: Request, code: str = "", state: str = ""):
     try:
-        return await complete_login(request, code, state)
+        verifier, return_to = take_oauth_state(request, state)
     except ServiceError as error:
+        # state 확인에 실패하면 저장된 return_to를 꺼낼 수 없으므로 첫 화면으로 리다이렉트한다
         return login_error(error.code)
+    try:
+        return await complete_login(request, code, verifier, return_to)
+    except ServiceError as error:
+        # GitHub 로그인 단계에서 실패하면 저장된 return_to로 리다이렉트한다
+        return login_error(error.code, return_to)
 
 
-async def complete_login(request: Request, code: str, state: str) -> RedirectResponse:
+def take_oauth_state(request: Request, state: str) -> tuple[str, str]:
     if not state or not hmac.compare_digest(state, request.cookies.get("coday_oauth", "")):
         raise ServiceError(
             "oauth_state", "로그인 확인이 만료되었습니다. 다시 로그인해 주세요.", 400
@@ -92,6 +103,12 @@ async def complete_login(request: Request, code: str, state: str) -> RedirectRes
             )
         verifier, return_to = saved.verifier, saved.return_to
         db.delete(saved)
+    return verifier, return_to
+
+
+async def complete_login(
+    request: Request, code: str, verifier: str, return_to: str
+) -> RedirectResponse:
     settings = request.app.state.settings
     data = await request.app.state.github.oauth(
         code=code,

@@ -506,7 +506,7 @@ def test_unknown_page_redirects_home_but_api_stays_404(github):
         assert client.get("/api/does-not-exist").status_code == 404
 
 
-# 로그인 콜백이 실패하면 JSON 대신 첫 화면으로 보내 오류 코드를 전달하는지 확인한다.
+# 로그인 콜백이 실패하면 return_to의 쿼리를 남긴 채 오류 코드를 붙여 리다이렉트하는지 확인한다.
 def test_login_callback_failure_redirects_to_ui(github, monkeypatch):
     async def rejected_oauth(**data):
         raise ServiceError("login_failed", "GitHub 로그인이 만료되었거나 승인되지 않았습니다.", 401)
@@ -514,12 +514,14 @@ def test_login_callback_failure_redirects_to_ui(github, monkeypatch):
     with TestClient(app) as client:
         app.state.settings = Settings(_env_file=None, github_client_id="client")
         monkeypatch.setattr(app.state.github, "oauth", rejected_oauth)
-        login = client.get("/api/auth/login", follow_redirects=False)
+        login = client.get(
+            "/api/auth/login", params={"return_to": "/?review=123"}, follow_redirects=False
+        )
         state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
 
         response = client.get(f"/api/auth/callback?code=x&state={state}", follow_redirects=False)
         assert response.status_code == 303
-        assert response.headers["location"] == "/?login_error=login_failed"
+        assert response.headers["location"] == "/?review=123&login_error=login_failed"
 
 
 # 수동 리뷰 중 head가 바뀌면 결과 게시를 막고 진행 댓글에 중단과 새 리뷰 요청 방법을 안내하는지 확인한다.
