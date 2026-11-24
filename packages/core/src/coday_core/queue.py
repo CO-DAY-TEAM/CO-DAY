@@ -152,6 +152,7 @@ async def enqueue(
             repository_id=repo.id,
             pr_number=number,
             title=pr["title"][:512],
+            pr_body=pr.get("body"),
             head_sha=head,
             base_sha=pr["base"]["sha"],
             settings=settings.model_dump(),

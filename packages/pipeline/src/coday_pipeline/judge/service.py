@@ -54,6 +54,22 @@ def validate_findings(result: ReviewResult, inputs: ReviewInput) -> ReviewResult
     return ReviewResult(findings=valid)
 
 
+def truncate_pr_body(body: str, encoding: tiktoken.Encoding, limit: int) -> str:
+    tokens = encoding.encode_ordinary(body)
+    if len(tokens) <= limit:
+        return body
+
+    marker = "\n\n[PR body truncated]"
+    prefix_length = limit - len(encoding.encode_ordinary(marker))
+    while True:
+        # 토큰 경계에서 잘린 UTF-8 문자의 끝부분을 버린다.
+        prefix = encoding.decode(tokens[:prefix_length], errors="ignore")
+        truncated = prefix + marker
+        if len(encoding.encode_ordinary(truncated)) <= limit:
+            return truncated
+        prefix_length -= 1
+
+
 async def judge(
     inputs: ReviewInput,
     instructions: str,
@@ -92,8 +108,11 @@ async def judge(
         ),
         output_type=ReviewResult,
     )
+    encoding = tiktoken.get_encoding("o200k_base")
     payload = {
         "review_instructions": instructions,
+        "pr_title": inputs.pr_title,
+        "pr_body": truncate_pr_body(inputs.pr_body, encoding, settings.max_pr_body_tokens),
         "files": [file.model_dump() for file in inputs.files],
         "related_files": inputs.related_files,
     }
@@ -102,7 +121,6 @@ async def judge(
             item.model_dump(exclude_none=True) for item in inputs.function_context
         ]
     review_input = json.dumps(payload, ensure_ascii=False)
-    encoding = tiktoken.get_encoding("o200k_base")
     if len(encoding.encode_ordinary(review_input)) > settings.max_input_tokens:
         raise ServiceError(
             "input_limit",

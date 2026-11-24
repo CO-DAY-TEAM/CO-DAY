@@ -21,6 +21,8 @@ class FunctionContext(BaseModel):
 
 
 class ReviewInput(BaseModel):
+    pr_title: str = ""
+    pr_body: str = ""
     files: list[AnalyzedFile] = Field(default_factory=list)
     excluded_files: dict[str, str] = Field(default_factory=dict)
     related_files: dict[str, str] = Field(default_factory=dict)

@@ -275,7 +275,9 @@ async def review() -> None:
     # 공식 러너가 전달한 PR 커밋, 마운트 경로, 리뷰 모델을 읽는다.
     base, head = os.environ["RB_BASE"], os.environ["RB_HEAD"]
     repo = Path(os.environ.get("RB_REPO", "/work/repo"))
-    pr = json.loads(Path(os.environ.get("RB_PR_JSON", "/work/pr/pr.json")).read_text())
+    pr = json.loads(
+        Path(os.environ.get("RB_PR_JSON", "/work/pr/pr.json")).read_text(encoding="utf-8")
+    )
     model = os.environ["RB_CONFIG_MODEL"]
 
     # CO-DAY 기본 설정에 실행용 키·모델을 적용한다. 컨테이너의 .env는 읽지 않는다.
@@ -327,7 +329,12 @@ async def review() -> None:
 
     # 공식 출력, 변환 전 리뷰, HEAD 좌표가 없어 제외한 지적을 각각 모은다.
     findings, original, omitted = [], [], 0
-    inputs = ReviewInput(related_files=context, function_context=functions)
+    inputs = ReviewInput(
+        pr_title=(pr.get("title") or "")[:512],
+        pr_body=pr.get("body") or "",
+        related_files=context,
+        function_context=functions,
+    )
     locations = {}
     statuses = {
         "A": "added",

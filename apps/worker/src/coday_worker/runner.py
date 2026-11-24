@@ -181,6 +181,8 @@ async def run_review(github: GitHub, review_id: str, connection=None, backend_pi
                 token,
                 guard,
             )
+            inputs.pr_title = review.title
+            inputs.pr_body = review.pr_body or ""
             with transaction() as db:
                 current = db.get(Review, review_id)
                 current.input, current.stage = inputs.model_dump(), "judge"

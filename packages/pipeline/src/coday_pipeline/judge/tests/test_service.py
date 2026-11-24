@@ -64,7 +64,14 @@ def test_finding_outside_reviewed_changes_is_rejected(inputs, path, line, start_
 
 
 # 전체 입력을 한 번에 전달하고 두 파일의 지적을 모두 반환한다. 실제 API는 호출하지 않는다.
-async def test_judge_reviews_all_files_in_one_call(inputs, monkeypatch):
+@pytest.mark.parametrize(
+    ("title", "body"),
+    [("", ""), ("PR 제목", "PR 본문입니다.\n\n두 번째 문단입니다.")],
+    ids=["empty", "provided"],
+)
+async def test_judge_reviews_all_files_in_one_call(inputs, monkeypatch, title, body):
+    inputs.pr_title = title
+    inputs.pr_body = body
     output = ReviewResult(findings=[finding("a.py"), finding("b.py", line=5)])
     run = AsyncMock(return_value=SimpleNamespace(final_output=output))
     reserve = AsyncMock()
@@ -75,20 +82,71 @@ async def test_judge_reviews_all_files_in_one_call(inputs, monkeypatch):
 
     run.assert_awaited_once()
     payload = json.loads(run.call_args.kwargs["input"])
-    assert payload["files"] == [file.model_dump() for file in inputs.files]
+    assert payload == {
+        "review_instructions": "리뷰 지침",
+        "pr_title": title,
+        "pr_body": body,
+        "files": [file.model_dump() for file in inputs.files],
+        "related_files": inputs.related_files,
+    }
     assert result == output
+
+
+@pytest.mark.parametrize(
+    ("body", "should_truncate"),
+    [
+        (" x" * 3999, False),
+        (" x" * 4000, False),
+        (" x" * 4001, True),
+        ("한글 변경 설명 🧑‍💻🦄\n" * 4000, True),
+    ],
+    ids=["below-limit", "at-limit", "above-limit", "unicode"],
+)
+async def test_judge_pr_body_token_limit(inputs, monkeypatch, body, should_truncate):
+    monkeypatch.delenv("MAX_PR_BODY_TOKENS", raising=False)
+    monkeypatch.delenv("MAX_INPUT_TOKENS", raising=False)
+    settings = Settings(_env_file=None, openai_api_key="test-key")
+    encoding = tiktoken.get_encoding("o200k_base")
+    assert settings.max_pr_body_tokens == 4000
+    assert (len(encoding.encode_ordinary(body)) > settings.max_pr_body_tokens) == should_truncate
+    inputs.pr_body = body
+    original = inputs.model_dump()
+    run = AsyncMock(return_value=SimpleNamespace(final_output=ReviewResult()))
+    monkeypatch.setattr(service.Runner, "run", run)
+
+    await service.judge(inputs, "", settings, AsyncMock())
+
+    payload = json.loads(run.call_args.kwargs["input"])
+    delivered = payload["pr_body"]
+    assert len(encoding.encode_ordinary(delivered)) <= settings.max_pr_body_tokens
+    if should_truncate:
+        marker = "\n\n[PR body truncated]"
+        assert delivered.endswith(marker)
+        prefix = delivered.removesuffix(marker)
+        assert prefix
+        assert body.startswith(prefix)
+        assert "\ufffd" not in delivered
+    else:
+        assert delivered == body
+    assert inputs.model_dump() == original
 
 
 # 전체 입력이 정확히 200,000토큰이면 통과하고, 한 토큰이라도 초과하면 모델 호출 전에 종료한다.
 async def test_judge_payload_token_limit(inputs, monkeypatch):
+    monkeypatch.delenv("MAX_PR_BODY_TOKENS", raising=False)
+    monkeypatch.delenv("MAX_INPUT_TOKENS", raising=False)
     settings = Settings(_env_file=None, openai_api_key="test-key")
     run = AsyncMock(return_value=SimpleNamespace(final_output=ReviewResult()))
     reserve = AsyncMock()
     monkeypatch.setattr(service.Runner, "run", run)
 
+    inputs.pr_title = "입력 한도 검증"
+    inputs.pr_body = "토큰 계산에 포함할 PR 본문"
     instructions = "리뷰 지침 <|endoftext|> x"
     payload = {
         "review_instructions": instructions,
+        "pr_title": inputs.pr_title,
+        "pr_body": inputs.pr_body,
         "files": [file.model_dump() for file in inputs.files],
         "related_files": inputs.related_files,
     }

@@ -75,6 +75,7 @@ class Review(Base):
     repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), index=True)
     pr_number: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(512))
+    pr_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     head_sha: Mapped[str] = mapped_column(String(64))
     base_sha: Mapped[str] = mapped_column(String(64))
     settings: Mapped[dict] = mapped_column(JSON)
