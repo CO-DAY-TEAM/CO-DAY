@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import type { Repository, Review, ReviewData, User } from '../../api/types'
 import { EmptyState } from '../../components/EmptyState'
@@ -54,8 +55,12 @@ export function ReviewsPage({
         .includes(query.trim().toLowerCase()),
   )
   const lastPage = Math.max(1, Math.ceil(filtered.length / pageSize))
-  // 새로고침 뒤 목록이 줄어 보던 페이지가 없어지면 마지막 페이지를 보여준다
+  // 새로고침 뒤 목록이 줄어 보던 페이지가 없어지면 마지막 페이지로 옮긴다
+  // page는 렌더링 뒤에 바뀌므로 그 전까지는 currentPage로 마지막 페이지를 보여준다
   const currentPage = Math.min(page, lastPage)
+  useEffect(() => {
+    if (page > lastPage) onPageChange(lastPage)
+  }, [page, lastPage, onPageChange])
   const displayed = filtered.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
