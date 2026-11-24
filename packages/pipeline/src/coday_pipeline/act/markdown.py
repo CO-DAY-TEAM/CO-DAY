@@ -2,6 +2,64 @@
 
 import re
 import string
+from html import escape
+from urllib.parse import urlsplit
+
+BADGE_BASE_URL = "https://raw.githubusercontent.com/CO-DAY-TEAM/CO-DAY/main/assets/badges"
+
+SEVERITY_BADGES = {
+    "Critical": ("critical", "Critical"),
+    "High": ("high", "High"),
+    "Medium": ("medium", "Medium"),
+    "Low": ("low", "Low"),
+}
+CATEGORY_BADGES = {
+    "bug": ("bug", "Bug"),
+    "security": ("security", "Security"),
+    "performance": ("performance", "Performance"),
+    "maintainability": ("maintainability", "Maintainability"),
+    "style": ("style", "Style"),
+}
+
+
+def render_review_badges(severity: str, category: str, *, base_url: str = BADGE_BASE_URL) -> str:
+    if not re.fullmatch(
+        r"https://[a-zA-Z0-9.-]+(?::[0-9]+)?(?:/[a-zA-Z0-9._~!$&'()+;=/-]*)?", base_url
+    ):
+        raise ValueError("뱃지 경로는 인증 정보가 없는 HTTPS URL이어야 합니다.")
+    url = urlsplit(base_url)
+    if (
+        not url.hostname
+        or not all(
+            re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+            for label in url.hostname.split(".")
+        )
+        or url.port == 0
+    ):
+        raise ValueError("뱃지 URL의 호스트 또는 포트가 올바르지 않습니다.")
+
+    try:
+        severity_badge = SEVERITY_BADGES[severity]
+        category_badge = CATEGORY_BADGES[category]
+    except KeyError as exc:
+        raise ValueError("지원하지 않는 리뷰 뱃지입니다.") from exc
+
+    return " ".join(
+        _badge_picture(f"{base_url.rstrip('/')}/{group}/{prefix}", label)
+        for group, (prefix, label) in (("severity", severity_badge), ("category", category_badge))
+    )
+
+
+def _badge_picture(url_prefix: str, label: str) -> str:
+    dark = escape(f"{url_prefix}-dark.svg", quote=True)
+    light = escape(f"{url_prefix}-light.svg", quote=True)
+    return (
+        "<picture>"
+        f'<source media="(prefers-color-scheme: dark)" srcset="{dark}">'
+        f'<source media="(prefers-color-scheme: light)" srcset="{light}">'
+        f'<img src="{light}" alt="{escape(label, quote=True)}" height="18" align="texttop">'
+        "</picture>"
+    )
 
 
 def excluded_file_row(path: str, reason: str) -> str:

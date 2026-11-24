@@ -7,8 +7,9 @@ from coday_contracts import (
     ReviewResult,
     ReviewSettings,
 )
+from coday_contracts.review_result import Finding
 from coday_core.db.models import Review
-from coday_pipeline.act.service import build_publication
+from coday_pipeline.act.service import build_inline_comment, build_publication
 from coday_pipeline.analyze.diff_parser import parse_patch
 from coday_pipeline.analyze.file_filter import exclusion
 
@@ -32,9 +33,9 @@ def finding_data(**updates):
 
 # 댓글의 설명 문단을 구성하고, suggestion이 있을 때만 교체 코드를 한 번 표시하는지 확인한다.
 @pytest.mark.parametrize(
-    "suggestion", [None, "const parsed = new URL(href);\nreturn parsed.protocol;"]
+    "suggestion", [None, "", "    const parsed = new URL(href);\n    return parsed.protocol;  "]
 )
-def test_server_renders_sections_and_only_one_suggestion(suggestion):
+def test_server_renders_paragraphs_and_only_one_suggestion(suggestion):
     result = ReviewResult.model_validate({"findings": [finding_data(suggestion=suggestion)]})
     publication = build_publication(
         Review(id="test", head_sha="head"),
@@ -55,12 +56,39 @@ def test_server_renders_sections_and_only_one_suggestion(suggestion):
         ),
     )
     body = publication["comments"][0]["body"]
-    assert all(label in body for label in ("발생 조건", "코드 근거", "수정 방향"))
-    assert "`href`" in body
-    assert "suggestion: null" not in body
-    assert body.count("```suggestion") == (0 if suggestion is None else 1)
-    if suggestion:
-        assert body.count(suggestion) == 1
+    badges, title, description, direction, *suggestions = body.split("\n\n", 4)
+    assert badges.count("<picture>") == 2
+    assert 'alt="High"' in badges and 'alt="Security"' in badges
+    assert title == f"**{finding_data()['title']}**"
+    assert description == f"{finding_data()['condition']} {finding_data()['evidence']}"
+    assert direction == finding_data()["recommendation"]
+    for removed in ("[보안]", "[High]", "**발생 조건**", "**코드 근거**", "**수정 방향**"):
+        assert removed not in body
+    assert suggestions == ([] if suggestion is None else [f"```suggestion\n{suggestion}\n```"])
+
+
+def test_inline_comment_keeps_code_blocks_and_safe_prose():
+    finding = Finding.model_validate(
+        finding_data(
+            title="`render()`에서 <tag> 노출",
+            condition="입력을 받습니다. 두 번째 문장입니다.",
+            evidence="```js\nconst mask = ~~value;\n```\n\n**근거** <tag> @user 1~2행",
+            recommendation="입력을 검사하세요. `~mask`는 그대로 두세요.",
+        )
+    )
+    body = build_inline_comment(finding)
+    assert "**`render()`에서 &lt;tag&gt; 노출**" in body
+    assert f"{finding.condition}\n\n```js\nconst mask = ~~value;\n```" in body
+    assert "**근거** &lt;tag&gt; @\u200buser 1\\~2행" in body
+    assert body.endswith(f"\n\n{finding.recommendation}")
+
+
+def test_inline_comment_falls_back_for_invalid_badge_url():
+    finding = Finding.model_validate(finding_data(suggestion=""))
+    body = build_inline_comment(finding, base_url="https://token@example.org/badges")
+    assert body.startswith(f"**[보안] [High] {finding.title}**\n\n")
+    assert f"{finding.condition} {finding.evidence}" in body
+    assert body.endswith("```suggestion\n\n```")
 
 
 def test_overlapping_suggestions_keep_priority_and_preserve_findings():
@@ -92,6 +120,13 @@ def test_overlapping_suggestions_keep_priority_and_preserve_findings():
     publication = build_publication(Review(id="conflicts", head_sha="head"), result, ReviewInput())
     assert len(publication["comments"]) == 5
     assert sum("```suggestion" in c["body"] for c in publication["comments"]) == 3
+    for finding, comment in zip(result.findings, publication["comments"], strict=True):
+        assert f"**{finding.title}**" in comment["body"]
+        assert comment["path"] == finding.path
+        assert comment["line"] == finding.line and comment["side"] == finding.side
+        if finding.start_line < finding.line:
+            assert comment["start_line"] == finding.start_line
+            assert comment["start_side"] == finding.side
 
 
 @pytest.mark.parametrize("severity", ["Critical", "High", "Medium", "Low"])
@@ -102,9 +137,9 @@ def test_every_severity_is_published_inline(severity):
     publication = build_publication(Review(id="severity", head_sha="head"), result, ReviewInput())
     assert len(publication["comments"]) == 1
     body = publication["comments"][0]["body"]
-    assert "[성능]" in body
-    assert f"[{severity}]" in body
-    assert f"[{severity}]" not in publication["body"]
+    assert 'alt="Performance"' in body
+    assert f'alt="{severity}"' in body
+    assert "<picture>" not in publication["body"]
 
 
 SUMMARY_CASES = [
@@ -171,7 +206,7 @@ def test_review_body_states(counts, file_count, excluded_paths):
         assert finding_data()["title"] not in body
         for severity, count in zip(SEVERITIES, counts, strict=True):
             assert (
-                sum(f"[{severity}]" in comment["body"] for comment in publication["comments"])
+                sum(f'alt="{severity}"' in comment["body"] for comment in publication["comments"])
                 == count
             )
     else:
