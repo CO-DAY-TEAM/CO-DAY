@@ -4,6 +4,10 @@ GitHub Pull Request를 자동으로 분석해 리뷰 코멘트를 남기는 AI �
 
 🔗 서비스 주소: https://co-day.me (준비 중)
 
+![CO-DAY 대시보드 데모](assets/readme/dashboard-demo.webp)
+
+![CO-DAY PR 리뷰 데모](assets/readme/pr-review-demo.webp)
+
 ## 주요 기능
 
 - **자동 코드 리뷰**: PR이 열리면 변경 사항을 분석해 버그, 스타일, 보안 이슈를 리뷰 코멘트로 등록합니다.
