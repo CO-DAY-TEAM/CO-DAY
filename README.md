@@ -40,12 +40,12 @@ flowchart LR
 | 영역 | 기술 |
 | --- | --- |
 | 백엔드 | Python 3.12, FastAPI, Pydantic v2 |
-| 에이전트 | OpenAI Agents SDK |
+| 에이전트 | OpenAI Agents SDK, tiktoken, Langfuse |
 | GitHub 연동 | GitHub App |
 | 비동기 처리 | PostgreSQL 기반 큐 |
 | DB | PostgreSQL 16, SQLAlchemy 2.0, Alembic |
-| 프론트엔드 | React, TypeScript, Vite, TanStack Query, Tailwind CSS, shadcn/ui |
-| 코드 품질 | ruff, Oxlint, pyright, import-linter, pytest |
+| 프론트엔드 | React, TypeScript, Vite |
+| 코드 품질 | ruff, Oxlint, pytest, pre-commit |
 | 인프라 | Docker Compose, Caddy, AWS EC2, GitHub Actions |
 | 모노레포 | uv workspace, pnpm |
 
@@ -66,6 +66,7 @@ co-day/
 │       ├── judge/
 │       └── act/
 ├── tests/            # 파이프라인 전체 흐름 테스트
+├── evals/            # 리뷰 품질 평가 (reviewbench)
 ├── fixtures/         # 테스트용 PR 샘플 데이터
 ├── scripts/          # 개발·배포 보조 스크립트
 ├── docs/             # 설계 문서
