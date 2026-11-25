@@ -23,6 +23,9 @@ export function ReviewsPage({
   searchRef,
   page,
   onPageChange,
+  lastPage,
+  displayed,
+  filtering,
   retrying,
   onRetry,
 }: {
@@ -40,19 +43,12 @@ export function ReviewsPage({
   searchRef: RefObject<HTMLInputElement | null>
   page: number
   onPageChange: (page: number) => void
+  lastPage: number
+  displayed: Review[]
+  filtering: boolean
   retrying: string
   onRetry: (review: Review) => void
 }) {
-  const pageReviews = data?.reviews ?? []
-  // 필터와 검색은 서버가 아니라 지금 받아온 페이지 안에서만 적용한다
-  const displayed = pageReviews.filter(
-    (review) =>
-      (statusFilter === 'all' || review.status === statusFilter) &&
-      `${review.title} ${review.repository} #${review.pr_number}`
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()),
-  )
-  const filtering = statusFilter !== 'all' || query.trim() !== ''
   const focusedCanRetry = repositories.some(
     (repo) =>
       repo.id === focusedReview?.repository_id &&
@@ -79,8 +75,13 @@ export function ReviewsPage({
 
       <StatsGrid stats={data?.stats} />
 
+      <div className="hint">
+        <b>ℹ 안내</b> 수동 리뷰는 PR 댓글에 <code>{user.review_command}</code>를
+        입력하세요. 저장소 Write 이상 권한이 필요합니다.
+      </div>
+
       {focusedReview &&
-        !pageReviews.some((review) => review.id === focusedReview.id) && (
+        !displayed.some((review) => review.id === focusedReview.id) && (
           <FocusedReview
             review={focusedReview}
             canRetry={focusedCanRetry}
@@ -108,7 +109,7 @@ export function ReviewsPage({
             ref={searchRef}
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="이 페이지에서 PR 제목·저장소 검색…"
+            placeholder="PR 제목·저장소 검색…"
             aria-label="PR 검색"
           />
         </label>
@@ -134,10 +135,9 @@ export function ReviewsPage({
             <p>░░░░░░░░░░░░░░░░░░░░</p>
             <p>░░░░░░░░░░░░░░░░░░░░░░░░</p>
           </div>
-        ) : filtering && pageReviews.length ? (
+        ) : filtering && data?.reviews.length ? (
           <EmptyState>
             <strong>조건에 맞는 리뷰가 없습니다</strong>
-            <p>필터와 검색은 현재 페이지의 리뷰에만 적용됩니다.</p>
             <button
               className="button"
               onClick={() => {
@@ -171,15 +171,11 @@ export function ReviewsPage({
         <span>{page} 페이지</span>
         <button
           className="button"
-          disabled={!data?.has_more || loading}
+          disabled={page === lastPage || loading}
           onClick={() => onPageChange(page + 1)}
         >
           다음 →
         </button>
-      </div>
-      <div className="hint">
-        <b>ℹ 안내</b> 수동 리뷰는 PR 댓글에 <code>{user.review_command}</code>를
-        입력하세요. 저장소 Write 이상 권한이 필요합니다.
       </div>
     </>
   )

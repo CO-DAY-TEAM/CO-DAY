@@ -6,6 +6,7 @@ import { StatusBar } from './components/layout/StatusBar'
 import { Titlebar } from './components/layout/Titlebar'
 import { HelpModal } from './components/modals/HelpModal'
 import { useRepos } from './hooks/useRepos'
+import { useReviewList } from './hooks/useReviewList'
 import { useReviews } from './hooks/useReviews'
 import { useShortcuts } from './hooks/useShortcuts'
 import { useTheme } from './hooks/useTheme'
@@ -35,12 +36,9 @@ function App() {
   const [theme, setTheme] = useTheme()
   const [helpOpen, setHelpOpen] = useState(false)
   const [selected, setSelected] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [query, setQuery] = useState('')
   const [focusedReview, setFocusedReview] = useState<Review | null>(null)
   const [error, setError] = useState(initialLoginError)
   const [notice, setNotice] = useState('')
-  const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
   const [retrying, setRetrying] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -51,10 +49,20 @@ function App() {
   const { data, loading, setLoading, syncedAt } = useReviews(
     user,
     selected,
-    page,
     revision,
     setError,
   )
+  const {
+    statusFilter,
+    changeStatusFilter,
+    query,
+    changeQuery,
+    page,
+    setPage,
+    lastPage,
+    displayed,
+    filtering,
+  } = useReviewList(data?.reviews)
 
   useEffect(() => {
     api<User>('/auth/me')
@@ -104,11 +112,6 @@ function App() {
     setSelected(value)
     setPage(1)
     setFocusedReview(null)
-  }
-
-  function changePage(value: number) {
-    setLoading(true)
-    setPage(value)
   }
 
   async function retry(review: Review) {
@@ -192,12 +195,15 @@ function App() {
             loading={loading}
             focusedReview={focusedReview}
             statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
+            onStatusFilterChange={changeStatusFilter}
             query={query}
-            onQueryChange={setQuery}
+            onQueryChange={changeQuery}
             searchRef={searchRef}
             page={page}
-            onPageChange={changePage}
+            onPageChange={setPage}
+            lastPage={lastPage}
+            displayed={displayed}
+            filtering={filtering}
             retrying={retrying}
             onRetry={retry}
           />

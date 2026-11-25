@@ -48,7 +48,6 @@ export type RepoData = {
 }
 export type ReviewData = {
   reviews: Review[]
-  has_more: boolean
   stats: {
     reviewed_prs: number
     findings: number
