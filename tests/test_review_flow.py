@@ -3,6 +3,7 @@ import hmac
 import json
 from contextlib import contextmanager
 from datetime import timedelta
+from unittest.mock import AsyncMock
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -48,6 +49,7 @@ class FakeGitHub:
         self.remote_reviews, self.comments = [], []
         self.lose_response = False
         self.post_count = 0
+        self.pr_metadata = {"title": "테스트 PR", "body": "최초 PR 본문"}
         self.draft, self.fork, self.bot = False, False, False
 
     async def check_installation(self, installation_id, full_name=None):
@@ -66,7 +68,7 @@ class FakeGitHub:
             return {
                 "state": "open",
                 "draft": self.draft,
-                "title": "테스트 PR",
+                **self.pr_metadata,
                 "changed_files": 1,
                 "user": {"type": "Bot" if self.bot else "User", "login": "author"},
                 "head": {"sha": self.head, "repo": {"id": 999 if self.fork else 20}},
@@ -126,6 +128,33 @@ def github():
         upsert_installation(db, {"id": 1, "account": {"id": 10, "login": "owner", "type": "User"}})
         upsert_repository(db, 1, {"id": 20, "full_name": "owner/test", "private": True})
     return FakeGitHub()
+
+
+@pytest.mark.parametrize(
+    "body_fields",
+    [{}, {"body": None}, {"body": "## 변경 목적\n\n" + "본문 " * 1024}],
+    ids=["missing", "null", "markdown"],
+)
+async def test_review_stores_pr_metadata_and_passes_it_to_worker(github, monkeypatch, body_fields):
+    title = "제목" * 300
+    github.pr_metadata = {"title": title, **body_fields}
+    review_id = await enqueue(github, 20, 1, "pr-body", "manual", "owner")
+    github.pr_metadata = {"title": "수정한 제목", "body": "수정한 본문"}
+    assert await enqueue(github, 20, 1, "pr-body", "manual", "owner") == review_id
+    assert await enqueue(github, 20, 1, "pr-body-active", "manual", "owner") == review_id
+
+    judge = AsyncMock(return_value=ReviewResult())
+    monkeypatch.setattr(runner, "judge", judge)
+    await execute(github, review_id)
+
+    judge.assert_awaited_once()
+    inputs = judge.call_args.args[0]
+    assert (inputs.pr_title, inputs.pr_body) == (title[:512], body_fields.get("body") or "")
+    with transaction() as db:
+        review = db.get(Review, review_id)
+        assert (review.title, review.pr_body) == (title[:512], body_fields.get("body"))
+        assert review.input == inputs.model_dump(mode="json")
+        assert review.status == "completed"
 
 
 def finding(path="calc.py", line=1):
@@ -209,8 +238,8 @@ async def test_manual_review_reanalyzes_and_republishes_current_head(
 ):
     calls = []
 
-    async def judge(*args):
-        calls.append(github.head)
+    async def judge(inputs, *args):
+        calls.append((github.head, inputs.pr_title, inputs.pr_body))
         return ReviewResult(findings=[finding(), finding()])
 
     monkeypatch.setattr(runner, "judge", judge)
@@ -224,15 +253,48 @@ async def test_manual_review_reanalyzes_and_republishes_current_head(
     assert github.remote_reviews[0]["event"] == "COMMENT"
     assert github.remote_reviews[0]["commit_id"] == "head1"
     github.head = next_head
+    github.pr_metadata = {"title": "새 제목", "body": "새 본문"}
     second = await enqueue(github, 20, 1, "manual-second", "manual", "owner")
+    assert second != first
     await execute(github, second)
-    assert calls == ["head1", next_head]
+    assert calls == [("head1", "테스트 PR", "최초 PR 본문"), (next_head, "새 제목", "새 본문")]
     assert github.remote_reviews[1]["commit_id"] == next_head
     assert len(github.remote_reviews[1]["comments"]) == 1
     assert github.remote_reviews[1]["comments"] == github.remote_reviews[0]["comments"]
     with transaction() as db:
         assert db.get(Review, second).status == "completed"
         assert db.scalar(select(func.count()).select_from(PostedFinding)) == 2
+
+
+async def test_retry_before_analyze_completes_uses_original_pr_metadata(github, monkeypatch):
+    review_id = await enqueue(github, 20, 1, "retry-analyze", "manual", "owner")
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            runner,
+            "analyze",
+            AsyncMock(side_effect=ServiceError("incomplete_diff", "diff 수집 실패")),
+        )
+        await execute(github, review_id)
+    with transaction() as db:
+        review = db.get(Review, review_id)
+        assert review.status == "failed"
+        assert review.error_code == "incomplete_diff"
+        assert review.input is None
+
+    github.pr_metadata = {"title": "수정한 제목", "body": "수정한 본문"}
+    judge = AsyncMock(return_value=ReviewResult())
+    monkeypatch.setattr(runner, "judge", judge)
+    await retry_review(github, review_id, "owner")
+    await execute(github, review_id)
+
+    judge.assert_awaited_once()
+    inputs = judge.call_args.args[0]
+    assert (inputs.pr_title, inputs.pr_body) == ("테스트 PR", "최초 PR 본문")
+    with transaction() as db:
+        review = db.get(Review, review_id)
+        assert review.status == "completed"
+        assert (review.title, review.pr_body) == ("테스트 PR", "최초 PR 본문")
+        assert review.input == inputs.model_dump(mode="json")
 
 
 # 실패 후 재시도하면 전체 입력과 최초 설정을 유지하는지 확인한다.
@@ -246,14 +308,13 @@ async def test_retry_reuses_full_input_and_frozen_configuration(github, monkeypa
             file_path="b.py", status="added", hunks=parse_patch("@@ -0,0 +1 @@\n+y = 2\n")
         ),
     ]
-    with transaction() as db:
-        review = db.get(Review, review_id)
-        review.input = ReviewInput(files=files).model_dump()
-        review.stage = "judge"
+    analyze = AsyncMock(return_value=ReviewInput(files=files))
+    monkeypatch.setattr(runner, "analyze", analyze)
+    expected = ReviewInput(files=files, pr_title="테스트 PR", pr_body="최초 PR 본문")
     calls = []
 
     async def broken(inputs, instructions, settings, reserve_attempt):
-        calls.append(inputs.files)
+        calls.append(inputs)
         raise RuntimeError("재시도 확인을 위해 발생시킨 오류")
 
     monkeypatch.setattr(runner, "judge", broken)
@@ -274,18 +335,23 @@ async def test_retry_reuses_full_input_and_frozen_configuration(github, monkeypa
     assert "게시할 문제를 발견하지 못했습니다." not in github.comments[0]["body"]
 
     async def recovered(inputs, instructions, settings, reserve_attempt):
-        calls.append(inputs.files)
+        calls.append(inputs)
         assert instructions == ""
         return ReviewResult()
 
     monkeypatch.setattr(runner, "judge", recovered)
+    github.pr_metadata = {"title": "수정한 제목", "body": "수정한 본문"}
     await retry_review(github, review_id, "owner")
     await execute(github, review_id)
-    assert calls == [files, files]
+    analyze.assert_awaited_once()
+    assert calls == [expected, expected]
     assert len(github.remote_reviews) == 1
     assert "분석 범위에서 게시할 문제를 발견하지 못했습니다." in github.remote_reviews[0]["body"]
     with transaction() as db:
-        assert db.get(Review, review_id).status == "completed"
+        review = db.get(Review, review_id)
+        assert review.status == "completed"
+        assert (review.title, review.pr_body) == (expected.pr_title, expected.pr_body)
+        assert review.input == expected.model_dump(mode="json")
 
 
 # 게시 응답이 유실되어 재시도해도 리뷰를 중복 게시하거나 통계를 중복 집계하지 않는지 확인한다.

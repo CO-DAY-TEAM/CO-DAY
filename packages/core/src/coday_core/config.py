@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     max_input_bytes: int = Field(default=20_000_000, ge=1000)
     # 리뷰 요청의 입력 토큰 한도
     max_input_tokens: int = Field(default=200_000, ge=1)
+    # PR 본문 토큰 한도. 잘림 표시를 포함할 여유를 둔다.
+    max_pr_body_tokens: int = Field(default=4_000, ge=8)
     # 관련 파일 후보의 최대 크기(바이트)
     max_related_file_bytes: int = Field(default=18000, ge=500)
     # 함께 조회할 관련 파일 수
