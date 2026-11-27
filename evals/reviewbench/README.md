@@ -33,11 +33,13 @@ cp evals/reviewbench/.env.example evals/reviewbench/.env
 mkdir -p evals/reviewbench/.cache
 git clone https://github.com/review-bench/ReviewBench.git evals/reviewbench/.cache/ReviewBench
 
-git -C evals/reviewbench/.cache/ReviewBench checkout --detach 36cc8a8dbce3375c80f58f957a2a2be34681cf49
+git -C evals/reviewbench/.cache/ReviewBench checkout --detach 86b8fd643e7bbcf41d1cdddd54cc450a420075d1
 (cd evals/reviewbench/.cache/ReviewBench && npm ci)
 ```
 
 ReviewBench는 위 커밋으로 고정하며, 업데이트가 필요할 때만 커밋과 의존성을 함께 변경합니다.
+
+버전을 바꾸면 정답 지적과 채점 방식이 달라질 수 있으므로 이전 버전의 점수와 직접 비교하지 않습니다. 실행에 사용한 ReviewBench 커밋은 `run.json`에 기록됩니다.
 
 ### 심사 모델 및 인증 설정
 
