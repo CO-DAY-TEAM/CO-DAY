@@ -1,0 +1,61 @@
+name: ReviewBench 업데이트 확인
+
+# 공식 ReviewBench main에 새 커밋이 있으면 기준 커밋을 올리는 draft PR을 하나만 유지
+# PR 본문의 평가 결과 영향 표시를 보고 리뷰어가 merge 또는 close
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 매주 월요일 09:00 (KST)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: reviewbench-upstream
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: reviewbench/upstream-update
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 공식 저장소 새 커밋 확인
+        id: upstream
+        run: bash evals/reviewbench/check_upstream.sh "$RUNNER_TEMP/pr-body.md"
+
+      - name: 업데이트 PR 생성 또는 갱신
+        if: steps.upstream.outputs.latest != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.upstream.outputs.latest }}
+        run: |
+          title="chore: ReviewBench를 최신 공식 버전(${LATEST:0:7})으로 업데이트"
+
+          # 지난 실행에서 같은 커밋으로 이미 올렸으면 다시 push하지 않음
+          # close한 PR을 같은 커밋으로 다시 열지 않기 위함
+          if git fetch -q origin "$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null &&
+            [ "$(git show "origin/$BRANCH:evals/reviewbench/REVIEWBENCH_COMMIT")" = "$LATEST" ]; then
+            echo "이미 $LATEST로 올린 브랜치가 있어 건너뜀"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          printf '%s\n' "$LATEST" > evals/reviewbench/REVIEWBENCH_COMMIT
+          git commit -q -am "$title"
+          git push -q --force origin "$BRANCH"
+
+          number=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"
+          else
+            gh pr create --draft --base main --head "$BRANCH" \
+              --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"
+          fi
