@@ -10,6 +10,7 @@ CO-DAY Docker 이미지로 리뷰를 생성하고 공식 ReviewBench 채점기�
 | `Dockerfile` | 로컬 평가와 공식 제출에 공통으로 사용하는 리뷰어 이미지 |
 | `run.sh` | 이미지 빌드 → 공식 리뷰 실행 → 원본 보관 → 공식 채점 |
 | `models.json` | 심사 모델 사양. 최초 로그인 전에 복사하고 평가마다 자동 복사하며, 키·토큰은 포함하지 않음 |
+| `REVIEWBENCH_COMMIT` | 평가에 사용할 ReviewBench 기준 커밋 |
 
 ## 설치 및 설정
 
@@ -27,17 +28,25 @@ cp evals/reviewbench/.env.example evals/reviewbench/.env
 
 ### ReviewBench 설치
 
-아래 커밋의 공식 평가 도구와 의존성을 설치합니다.
+`REVIEWBENCH_COMMIT`에 적힌 기준 커밋의 공식 평가 도구와 의존성을 설치합니다.
 
 ```bash
 mkdir -p evals/reviewbench/.cache
 git clone https://github.com/review-bench/ReviewBench.git evals/reviewbench/.cache/ReviewBench
 
-git -C evals/reviewbench/.cache/ReviewBench checkout --detach 36cc8a8dbce3375c80f58f957a2a2be34681cf49
+git -C evals/reviewbench/.cache/ReviewBench checkout --detach "$(cat evals/reviewbench/REVIEWBENCH_COMMIT)"
 (cd evals/reviewbench/.cache/ReviewBench && npm ci)
 ```
 
-ReviewBench는 위 커밋으로 고정하며, 업데이트가 필요할 때만 커밋과 의존성을 함께 변경합니다.
+기준 커밋은 `REVIEWBENCH_COMMIT`에서만 변경합니다. 설치된 커밋이 기준 커밋과 다르면 `run.sh`가 평가를 시작하지 않고 아래 업데이트 명령을 안내합니다.
+
+```bash
+git -C evals/reviewbench/.cache/ReviewBench fetch
+git -C evals/reviewbench/.cache/ReviewBench checkout --detach "$(cat evals/reviewbench/REVIEWBENCH_COMMIT)"
+(cd evals/reviewbench/.cache/ReviewBench && npm ci)
+```
+
+버전을 바꾸면 정답 지적과 채점 방식이 달라질 수 있으므로 이전 버전의 점수와 직접 비교하지 않습니다. 실행에 사용한 ReviewBench 커밋은 `run.json`에 기록됩니다.
 
 ### 심사 모델 및 인증 설정
 

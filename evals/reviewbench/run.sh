@@ -16,6 +16,25 @@ cd "$eval_dir/../.."
 reviewbench="$eval_dir/.cache/ReviewBench"
 work="$eval_dir/.cache/work"
 
+# 설치된 ReviewBench가 기준 커밋과 다르면 이전 버전으로 평가하지 않도록 중단
+reviewbench_commit=$(< "$eval_dir/REVIEWBENCH_COMMIT")
+installed_commit=$(git -C "$reviewbench" rev-parse HEAD 2>/dev/null || true)
+
+if [[ -z "$installed_commit" ]]; then
+  printf 'ReviewBench가 설치되지 않았습니다. README의 "ReviewBench 설치"를 따라 설치합니다.\n' >&2
+  exit 1
+fi
+
+if [[ "$installed_commit" != "$reviewbench_commit" ]]; then
+  printf 'ReviewBench 설치 커밋(%s)이 기준 커밋(%s)과 다릅니다.\n' \
+    "$installed_commit" "$reviewbench_commit" >&2
+  printf '다음 명령으로 업데이트한 뒤 다시 실행합니다.\n' >&2
+  printf '  git -C evals/reviewbench/.cache/ReviewBench fetch\n' >&2
+  printf '  git -C evals/reviewbench/.cache/ReviewBench checkout --detach %s\n' "$reviewbench_commit" >&2
+  printf '  (cd evals/reviewbench/.cache/ReviewBench && npm ci)\n' >&2
+  exit 1
+fi
+
 run="$eval_dir/runs/$(date +%Y%m%d-%H%M%S)"
 image="coday-reviewbench:$(basename "$run")"
 
