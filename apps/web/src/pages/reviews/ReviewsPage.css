@@ -6,7 +6,9 @@
 }
 .filters {
   border: 1px solid var(--border);
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: 3px;
   background: var(--panel);
 }
@@ -43,6 +45,16 @@
 
 .review-panel {
   padding: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) minmax(0, 1fr) max-content max-content;
+  column-gap: 24px;
+}
+.review-panel > * {
+  grid-column: 1 / -1;
+}
+.review-list {
+  display: grid;
+  grid-template-columns: subgrid;
 }
 .skeleton {
   padding: 24px 16px;
@@ -71,6 +83,10 @@
 }
 
 @media (max-width: 800px) {
+  .review-panel {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    column-gap: 12px;
+  }
   .review-tools {
     flex-direction: column;
   }

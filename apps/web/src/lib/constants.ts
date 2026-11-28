@@ -9,6 +9,11 @@ export const statuses: Record<string, string> = {
   superseded: '중단',
 }
 export const statusFilters = ['all', 'running', 'completed', 'queued', 'failed']
+export const repoStates = {
+  paused: '중지됨',
+  auto: '자동 리뷰',
+  manual: '수동 리뷰',
+}
 export const categories: Record<string, string> = {
   bug: '버그',
   security: '보안',
@@ -19,28 +24,24 @@ export const categories: Record<string, string> = {
 export const views: {
   key: View
   label: string
-  title: string
   command: string
   description: string
 }[] = [
   {
     key: 'reviews',
     label: '대시보드',
-    title: '리뷰와 통계',
     command: 'reviews',
     description: '리뷰의 흐름을 확인하고, 코드 이야기는 GitHub에서 이어가세요.',
   },
   {
     key: 'repos',
     label: '레포지토리',
-    title: '레포지토리',
     command: 'repos --list',
     description: 'CO-DAY가 리뷰하는 GitHub 저장소와 내 권한을 확인합니다.',
   },
   {
     key: 'settings',
     label: '설정',
-    title: '리뷰 설정',
     command: 'config',
     description: '팀의 공통 기준과 저장소별 리뷰 방식을 관리하세요.',
   },

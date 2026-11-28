@@ -1,5 +1,6 @@
 import type { Installation, Repository } from '../../api/types'
 import { Panel } from '../../components/Panel'
+import { repoStates } from '../../lib/constants'
 import './RepoCard.css'
 
 export function RepoCard({
@@ -17,6 +18,7 @@ export function RepoCard({
     ? installation?.settings.automatic
     : repo.settings.automatic
   const name = repo.full_name.split('/').pop() ?? repo.full_name
+  const state = installation?.paused ? 'paused' : automatic ? 'auto' : 'manual'
 
   return (
     <Panel className="repo-card">
@@ -25,18 +27,8 @@ export function RepoCard({
           {name.slice(0, 2).toUpperCase()}
         </span>
         <span className="repo-name">
-          <strong>{name}</strong>
-          <small>{repo.full_name}</small>
-        </span>
-        <span
-          className={`switch ${automatic && !installation?.paused ? 'on' : ''}`}
-          title="자동 리뷰"
-        >
-          {installation?.paused
-            ? '[중지됨]'
-            : automatic
-              ? '[●  ON]'
-              : '[OFF  ○]'}
+          <strong title={name}>{name}</strong>
+          <small title={repo.full_name}>{repo.full_name}</small>
         </span>
       </div>
       <div className="badges">
@@ -45,7 +37,7 @@ export function RepoCard({
         <span>{repo.use_common ? '공통 설정' : '독립 설정'}</span>
       </div>
       <div className="repo-actions">
-        <span className="muted">자동 리뷰</span>
+        <span className={`repo-state-${state}`}>{repoStates[state]}</span>
         <span>
           <button className="button small" onClick={onShowReviews}>
             리뷰 보기

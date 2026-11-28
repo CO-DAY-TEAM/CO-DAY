@@ -71,7 +71,6 @@ export function ReviewsPage({
             </option>
           ))}
         </select>
-        <span className="muted toolbar-end">누적 기록</span>
       </div>
 
       <StatsGrid stats={data?.stats} />

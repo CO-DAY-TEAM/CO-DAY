@@ -29,7 +29,7 @@ export function Toggle({
         disabled={disabled}
       />
       <span className={`switch ${checked ? 'on' : ''}`} aria-hidden="true">
-        {checked ? '[●  ON]' : '[OFF  ○]'}
+        {checked ? '[●   ON]' : '[OFF  ○]'}
       </span>
     </label>
   )

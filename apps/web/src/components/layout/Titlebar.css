@@ -59,10 +59,15 @@
   border-radius: 50%;
   font-weight: 700;
   font-size: 10px;
-  margin-right: 6px;
+  flex-shrink: 0;
 }
 .user-wrap {
   position: relative;
+}
+.user-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .dropdown {
   position: absolute;
@@ -90,6 +95,11 @@
   color: var(--accent);
 }
 
+@media (max-width: 1000px) {
+  .user-name {
+    display: none;
+  }
+}
 @media (max-width: 800px) {
   .titlebar {
     height: auto;
